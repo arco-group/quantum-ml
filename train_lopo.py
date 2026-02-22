@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-#SBATCH -C NOGPU -c 4
 from __future__ import annotations
 
 import argparse
@@ -9,10 +8,10 @@ from typing import Any
 import numpy as np
 import torch
 
-from src.baselines import PersistenceBaseline, RidgePerHorizonBaseline
+from src.baselines import PersistenceBaseline, RidgePerHorizonBaseline, XGBoostDirectBaseline
 from src.data import FEATURES, PerturbConfig, load_subject_series, prepare_split_data
 from src.eval import aggregate_rows, compute_metrics, save_rows_table
-from src.models import GRUMixerModel, TinyTransformerModel
+from src.models import GRUMixerModel, LSTMTinyModel, TinyTCNModel, TinyTransformerModel
 from src.models.vqc import pennylane_available
 from src.splits import lopo_folds, sample_subject_fraction, split_train_val_subjects
 from src.train import count_parameters, fit_model, make_dataloader, predict_model
@@ -26,7 +25,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--model",
         type=str,
         default="gru_mixer",
-        choices=["gru_mixer", "transformer", "ridge", "persistence"],
+        choices=["gru_mixer", "lstm_tiny", "tcn", "transformer", "ridge", "persistence", "xgboost_direct"],
     )
     parser.add_argument("--mixer", type=str, default="none", choices=["none", "mlp", "vqc"])
     parser.add_argument("--n_qubits", type=int, default=6)
@@ -53,6 +52,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--val_ratio", type=float, default=0.1)
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--ridge_alpha", type=float, default=1.0)
+    parser.add_argument("--lstm_hidden_dim", type=int, default=56)
+    parser.add_argument("--tcn_channels", type=int, default=32)
+    parser.add_argument("--tcn_levels", type=int, default=3)
+    parser.add_argument("--tcn_kernel_size", type=int, default=3)
+    parser.add_argument("--tcn_dropout", type=float, default=0.1)
+    parser.add_argument("--xgb_n_estimators", type=int, default=16)
+    parser.add_argument("--xgb_max_depth", type=int, default=6)
+    parser.add_argument("--xgb_learning_rate", type=float, default=0.05)
+    parser.add_argument("--xgb_subsample", type=float, default=0.8)
+    parser.add_argument("--xgb_colsample_bytree", type=float, default=0.8)
+    parser.add_argument("--xgb_n_jobs", type=int, default=1)
     parser.add_argument("--mlp_dim", type=int, default=6)
     parser.add_argument("--max_folds", type=int, default=0, help="0 means all LOPO folds")
     parser.add_argument(
@@ -116,6 +126,21 @@ def build_torch_model(
             vqc_prefer_gpu=prefer_gpu,
             vqc_vectorized=bool(setting["vqc_vectorized"]),
         )
+    if model_name == "lstm_tiny":
+        return LSTMTinyModel(
+            input_dim=input_dim,
+            horizons=horizons,
+            hidden_dim=setting["lstm_hidden_dim"],
+        )
+    if model_name == "tcn":
+        return TinyTCNModel(
+            input_dim=input_dim,
+            horizons=horizons,
+            channels=setting["tcn_channels"],
+            levels=setting["tcn_levels"],
+            kernel_size=setting["tcn_kernel_size"],
+            dropout=setting["tcn_dropout"],
+        )
     if model_name == "transformer":
         return TinyTransformerModel(
             input_dim=input_dim,
@@ -161,6 +186,23 @@ def run_single_setting(
         baseline = RidgePerHorizonBaseline(alpha=setting["ridge_alpha"])
         baseline.fit(x_train, y_train)
         y_pred_target = baseline.predict(x_test)
+    elif setting["model"] == "xgboost_direct":
+        baseline = XGBoostDirectBaseline(
+            n_estimators=setting["xgb_n_estimators"],
+            max_depth=setting["xgb_max_depth"],
+            learning_rate=setting["xgb_learning_rate"],
+            subsample=setting["xgb_subsample"],
+            colsample_bytree=setting["xgb_colsample_bytree"],
+            seed=args.seed,
+            n_jobs=setting["xgb_n_jobs"],
+        )
+        baseline.fit(x_train, y_train)
+        y_pred_target = baseline.predict(x_test)
+        logger.info(
+            "run=%s model=xgboost_direct effective_params~%d",
+            run_name,
+            baseline.effective_param_count(),
+        )
     else:
         check_vqc_dependency(setting["mixer"])
         requested_device = resolve_device(args.device, force_cpu=False)
@@ -267,6 +309,17 @@ def base_setting_from_args(args: argparse.Namespace) -> dict[str, Any]:
         "vqc_backend": args.vqc_backend,
         "mlp_dim": args.mlp_dim if args.mlp_dim > 0 else args.n_qubits,
         "ridge_alpha": args.ridge_alpha,
+        "lstm_hidden_dim": args.lstm_hidden_dim,
+        "tcn_channels": args.tcn_channels,
+        "tcn_levels": args.tcn_levels,
+        "tcn_kernel_size": args.tcn_kernel_size,
+        "tcn_dropout": args.tcn_dropout,
+        "xgb_n_estimators": args.xgb_n_estimators,
+        "xgb_max_depth": args.xgb_max_depth,
+        "xgb_learning_rate": args.xgb_learning_rate,
+        "xgb_subsample": args.xgb_subsample,
+        "xgb_colsample_bytree": args.xgb_colsample_bytree,
+        "xgb_n_jobs": args.xgb_n_jobs,
     }
 
 
@@ -405,6 +458,17 @@ def run_standard_mode(
             "vqc_entangle": setting["vqc_entangle"],
             "vqc_vectorized": setting["vqc_vectorized"],
             "vqc_backend": setting["vqc_backend"],
+            "lstm_hidden_dim": setting["lstm_hidden_dim"],
+            "tcn_channels": setting["tcn_channels"],
+            "tcn_levels": setting["tcn_levels"],
+            "tcn_kernel_size": setting["tcn_kernel_size"],
+            "tcn_dropout": setting["tcn_dropout"],
+            "xgb_n_estimators": setting["xgb_n_estimators"],
+            "xgb_max_depth": setting["xgb_max_depth"],
+            "xgb_learning_rate": setting["xgb_learning_rate"],
+            "xgb_subsample": setting["xgb_subsample"],
+            "xgb_colsample_bytree": setting["xgb_colsample_bytree"],
+            "xgb_n_jobs": setting["xgb_n_jobs"],
             "window_stride": args.window_stride,
             "n_train_subjects": len(train_subjects),
             "n_val_subjects": len(val_subjects),
@@ -492,6 +556,17 @@ def run_data_efficiency_mode(
                     "target_mode": variant["target_mode"],
                     "vqc_vectorized": variant["vqc_vectorized"],
                     "vqc_backend": variant["vqc_backend"],
+                    "lstm_hidden_dim": variant["lstm_hidden_dim"],
+                    "tcn_channels": variant["tcn_channels"],
+                    "tcn_levels": variant["tcn_levels"],
+                    "tcn_kernel_size": variant["tcn_kernel_size"],
+                    "tcn_dropout": variant["tcn_dropout"],
+                    "xgb_n_estimators": variant["xgb_n_estimators"],
+                    "xgb_max_depth": variant["xgb_max_depth"],
+                    "xgb_learning_rate": variant["xgb_learning_rate"],
+                    "xgb_subsample": variant["xgb_subsample"],
+                    "xgb_colsample_bytree": variant["xgb_colsample_bytree"],
+                    "xgb_n_jobs": variant["xgb_n_jobs"],
                     "window_stride": args.window_stride,
                     "train_fraction": float(fraction),
                     "n_train_subjects": len(sampled_train),
@@ -584,6 +659,17 @@ def run_robustness_mode(
                     "target_mode": variant["target_mode"],
                     "vqc_vectorized": variant["vqc_vectorized"],
                     "vqc_backend": variant["vqc_backend"],
+                    "lstm_hidden_dim": variant["lstm_hidden_dim"],
+                    "tcn_channels": variant["tcn_channels"],
+                    "tcn_levels": variant["tcn_levels"],
+                    "tcn_kernel_size": variant["tcn_kernel_size"],
+                    "tcn_dropout": variant["tcn_dropout"],
+                    "xgb_n_estimators": variant["xgb_n_estimators"],
+                    "xgb_max_depth": variant["xgb_max_depth"],
+                    "xgb_learning_rate": variant["xgb_learning_rate"],
+                    "xgb_subsample": variant["xgb_subsample"],
+                    "xgb_colsample_bytree": variant["xgb_colsample_bytree"],
+                    "xgb_n_jobs": variant["xgb_n_jobs"],
                     "window_stride": args.window_stride,
                     "perturb_type": args.perturb_type,
                     "perturb_target": args.perturb_target,

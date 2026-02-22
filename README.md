@@ -17,6 +17,8 @@ src/
   utils.py
   models/
     gru_mixer.py
+    lstm_tiny.py
+    tcn.py
     transformer.py
     vqc.py
 ```
@@ -29,6 +31,7 @@ pip install openpyxl  # necessario per output .xlsx
 pip install pennylane  # obbligatorio solo per mixer=vqc
 pip install pennylane-lightning  # consigliato (backend lightning.qubit)
 # pip install pennylane-lightning-gpu  # opzionale per backend lightning.gpu
+pip install xgboost  # obbligatorio solo per model=xgboost_direct
 ```
 
 ## Dataset atteso
@@ -102,7 +105,21 @@ Baselines classiche:
 ```bash
 python train_lopo.py --model persistence
 python train_lopo.py --model ridge
+python train_lopo.py --model xgboost_direct
 ```
+
+Nuove baseline comparabili a `GRU+VQC` (default):
+
+```bash
+python train_lopo.py --model lstm_tiny --lstm_hidden_dim 56
+python train_lopo.py --model tcn --tcn_channels 32 --tcn_levels 3 --tcn_kernel_size 3 --tcn_dropout 0.1
+python train_lopo.py --model xgboost_direct --xgb_n_estimators 16 --xgb_max_depth 6 --xgb_learning_rate 0.05
+```
+
+Nota capacity matching (default):
+
+- `GRU+VQC (6 qubits, depth=3)` ~ stesso ordine di grandezza dei parametri trainabili di `lstm_tiny` con `hidden=56` e `tcn` con `channels=32, levels=3`.
+- `xgboost_direct` usa una metrica di complessita "effective params" (`horizons * features * n_estimators * 2^max_depth`) per stare nello stesso ordine di grandezza.
 
 Output principali in `--output_dir`:
 
