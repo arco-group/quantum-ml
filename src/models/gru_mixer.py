@@ -22,6 +22,7 @@ class GRUMixerModel(nn.Module):
         vqc_entangle: bool = True,
         vqc_backend: str = "auto",
         vqc_prefer_gpu: bool = False,
+        vqc_vectorized: bool = True,
     ) -> None:
         super().__init__()
         self.horizons = list(horizons)
@@ -57,6 +58,7 @@ class GRUMixerModel(nn.Module):
                 entangle=vqc_entangle,
                 device_name=vqc_backend,
                 prefer_gpu=vqc_prefer_gpu,
+                vectorized=vqc_vectorized,
             )
             head_in_dim = hidden_dim + n_qubits
         else:

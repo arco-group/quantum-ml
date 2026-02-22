@@ -31,6 +31,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--n_qubits", type=int, default=6)
     parser.add_argument("--vqc_depth", type=int, default=3)
     parser.add_argument("--vqc_entangle", type=int, default=1, choices=[0, 1])
+    parser.add_argument("--vqc_vectorized", type=int, default=1, choices=[0, 1])
     parser.add_argument(
         "--vqc_backend",
         type=str,
@@ -104,6 +105,7 @@ def build_torch_model(
             vqc_entangle=bool(setting["vqc_entangle"]),
             vqc_backend=setting["vqc_backend"],
             vqc_prefer_gpu=prefer_gpu,
+            vqc_vectorized=bool(setting["vqc_vectorized"]),
         )
     if model_name == "transformer":
         return TinyTransformerModel(
@@ -162,19 +164,22 @@ def run_single_setting(
         if setting["model"] == "gru_mixer" and setting["mixer"] == "vqc":
             uses_gpu_backend = bool(getattr(model.mixer_block, "uses_gpu_backend", False))
             backend_name = str(getattr(model.mixer_block, "device_name", "unknown"))
+            vectorized_enabled = bool(getattr(model.mixer_block, "vectorized_enabled", False))
             if requested_device.type == "cuda" and not uses_gpu_backend:
                 device = torch.device("cpu")
                 logger.info(
-                    "run=%s vqc_backend=%s is CPU-only; falling back to device=cpu",
+                    "run=%s vqc_backend=%s is CPU-only; falling back to device=cpu (vectorized=%s)",
                     run_name,
                     backend_name,
+                    vectorized_enabled,
                 )
             else:
                 logger.info(
-                    "run=%s using vqc_backend=%s on device=%s",
+                    "run=%s using vqc_backend=%s on device=%s (vectorized=%s)",
                     run_name,
                     backend_name,
                     device,
+                    vectorized_enabled,
                 )
 
         logger.info(
@@ -240,6 +245,7 @@ def base_setting_from_args(args: argparse.Namespace) -> dict[str, Any]:
         "n_qubits": args.n_qubits,
         "vqc_depth": args.vqc_depth,
         "vqc_entangle": args.vqc_entangle,
+        "vqc_vectorized": args.vqc_vectorized,
         "vqc_backend": args.vqc_backend,
         "mlp_dim": args.mlp_dim if args.mlp_dim > 0 else args.n_qubits,
         "ridge_alpha": args.ridge_alpha,
@@ -322,6 +328,7 @@ def run_standard_mode(
             "n_qubits": setting["n_qubits"],
             "vqc_depth": setting["vqc_depth"],
             "vqc_entangle": setting["vqc_entangle"],
+            "vqc_vectorized": setting["vqc_vectorized"],
             "vqc_backend": setting["vqc_backend"],
             "n_train_subjects": len(train_subjects),
             "n_val_subjects": len(val_subjects),
@@ -404,6 +411,7 @@ def run_data_efficiency_mode(
                     "variant": variant["variant"],
                     "model": variant["model"],
                     "mixer": variant["mixer"],
+                    "vqc_vectorized": variant["vqc_vectorized"],
                     "vqc_backend": variant["vqc_backend"],
                     "train_fraction": float(fraction),
                     "n_train_subjects": len(sampled_train),
@@ -491,6 +499,7 @@ def run_robustness_mode(
                     "variant": variant["variant"],
                     "model": variant["model"],
                     "mixer": variant["mixer"],
+                    "vqc_vectorized": variant["vqc_vectorized"],
                     "vqc_backend": variant["vqc_backend"],
                     "perturb_type": args.perturb_type,
                     "perturb_target": args.perturb_target,

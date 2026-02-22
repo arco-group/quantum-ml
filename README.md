@@ -68,7 +68,7 @@ python train_lopo.py --model gru_mixer --mixer vqc --n_qubits 6 --vqc_depth 3 --
 VQC con tentativo backend GPU (se disponibile):
 
 ```bash
-python train_lopo.py --model gru_mixer --mixer vqc --vqc_backend auto --device cuda
+python train_lopo.py --model gru_mixer --mixer vqc --vqc_backend auto --vqc_vectorized 1 --device cuda
 ```
 
 VQC forzato su `lightning.gpu` (errore se plugin non presente):
@@ -186,4 +186,7 @@ Output:
 - `--vqc_backend`:
   - `auto` (default): prova `lightning.gpu` su host CUDA, altrimenti fallback CPU
   - `lightning.gpu`, `lightning.qubit`, `default.qubit`, `default.qubit.torch`
+- `--vqc_vectorized`:
+  - `1` (default): prova inferenza/training batched nel VQC, con fallback automatico a loop per-sample
+  - `0`: forza modalità per-sample (più lenta ma utile per debug)
 - Seed fisso con `--seed`.
