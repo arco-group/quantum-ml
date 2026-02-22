@@ -23,7 +23,7 @@ class VQCLayer(nn.Module):
         n_qubits: int = 6,
         depth: int = 3,
         entangle: bool = True,
-        device_name: str = "default.qubit.torch",
+        device_name: str = "default.qubit",
     ) -> None:
         super().__init__()
         if not _HAS_PENNYLANE:
