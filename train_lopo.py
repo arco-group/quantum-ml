@@ -42,6 +42,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--L", type=int, default=240)
     parser.add_argument("--window_stride", type=int, default=1)
     parser.add_argument("--horizons", type=str, default="15,30,60")
+    parser.add_argument("--target_mode", type=str, default="value", choices=["value", "delta"])
     parser.add_argument("--nan_strategy", type=str, default="ffill_bfill", choices=["ffill_bfill", "drop"])
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--output_dir", type=str, default="runs/standard")
@@ -139,6 +140,8 @@ def run_single_setting(
     y_val = split_data["y_val"]
     x_test = split_data["x_test"]
     y_test = split_data["y_test"]
+    y_test_abs = split_data["y_test_abs"]
+    anchor_test = split_data["anchor_test"]
 
     if x_train.shape[0] == 0:
         logger.warning("Skipping run=%s because x_train is empty", run_name)
@@ -148,15 +151,16 @@ def run_single_setting(
         return None
 
     if setting["model"] == "persistence":
-        baseline = PersistenceBaseline(n_features=len(FEATURES))
+        baseline = PersistenceBaseline(
+            n_features=len(FEATURES),
+            target_mode=setting["target_mode"],
+        )
         baseline.fit(x_train, y_train)
-        y_pred = baseline.predict(x_test)
-        y_true = y_test
+        y_pred_target = baseline.predict(x_test)
     elif setting["model"] == "ridge":
         baseline = RidgePerHorizonBaseline(alpha=setting["ridge_alpha"])
         baseline.fit(x_train, y_train)
-        y_pred = baseline.predict(x_test)
-        y_true = y_test
+        y_pred_target = baseline.predict(x_test)
     else:
         check_vqc_dependency(setting["mixer"])
         requested_device = resolve_device(args.device, force_cpu=False)
@@ -241,15 +245,21 @@ def run_single_setting(
         checkpoint = torch.load(checkpoint_path, map_location=device)
         model.load_state_dict(checkpoint["model_state_dict"])
         model.to(device)
-        y_pred, y_true = predict_model(model=model, loader=test_loader, device=device)
+        y_pred_target, _ = predict_model(model=model, loader=test_loader, device=device)
 
-    return compute_metrics(y_true=y_true, y_pred=y_pred, horizons=horizons, features=FEATURES)
+    y_pred_abs = target_to_absolute(
+        y_pred_target=y_pred_target,
+        anchors=anchor_test,
+        target_mode=setting["target_mode"],
+    )
+    return compute_metrics(y_true=y_test_abs, y_pred=y_pred_abs, horizons=horizons, features=FEATURES)
 
 
 def base_setting_from_args(args: argparse.Namespace) -> dict[str, Any]:
     return {
         "model": args.model,
         "mixer": args.mixer if args.model == "gru_mixer" else "none",
+        "target_mode": args.target_mode,
         "n_qubits": args.n_qubits,
         "vqc_depth": args.vqc_depth,
         "vqc_entangle": args.vqc_entangle,
@@ -275,6 +285,22 @@ def get_variant_settings(args: argparse.Namespace) -> list[dict[str, Any]]:
         "variant": "gru_vqc",
     }
     return [none_variant, vqc_variant]
+
+
+def target_to_absolute(
+    y_pred_target: np.ndarray,
+    anchors: np.ndarray,
+    target_mode: str,
+) -> np.ndarray:
+    if target_mode == "value":
+        return y_pred_target.astype(np.float32)
+    if target_mode == "delta":
+        if anchors.ndim != 2 or anchors.shape[0] != y_pred_target.shape[0]:
+            raise ValueError(
+                f"Invalid anchors shape {anchors.shape} for predictions {y_pred_target.shape}"
+            )
+        return (y_pred_target + anchors[:, None, :]).astype(np.float32)
+    raise ValueError(f"Unsupported target_mode: {target_mode}")
 
 
 def trim_folds(
@@ -347,6 +373,7 @@ def run_standard_mode(
             test_subject=test_subject,
             l_window=args.L,
             horizons=horizons,
+            target_mode=args.target_mode,
             window_stride=args.window_stride,
             mask_channel=False,
             missing_impute=args.missing_impute,
@@ -372,6 +399,7 @@ def run_standard_mode(
             "test_subject": test_subject,
             "model": setting["model"],
             "mixer": setting["mixer"],
+            "target_mode": setting["target_mode"],
             "n_qubits": setting["n_qubits"],
             "vqc_depth": setting["vqc_depth"],
             "vqc_entangle": setting["vqc_entangle"],
@@ -433,6 +461,7 @@ def run_data_efficiency_mode(
                     test_subject=test_subject,
                     l_window=args.L,
                     horizons=horizons,
+                    target_mode=args.target_mode,
                     window_stride=args.window_stride,
                     mask_channel=False,
                     missing_impute=args.missing_impute,
@@ -460,6 +489,7 @@ def run_data_efficiency_mode(
                     "variant": variant["variant"],
                     "model": variant["model"],
                     "mixer": variant["mixer"],
+                    "target_mode": variant["target_mode"],
                     "vqc_vectorized": variant["vqc_vectorized"],
                     "vqc_backend": variant["vqc_backend"],
                     "window_stride": args.window_stride,
@@ -519,6 +549,7 @@ def run_robustness_mode(
                     test_subject=test_subject,
                     l_window=args.L,
                     horizons=horizons,
+                    target_mode=args.target_mode,
                     window_stride=args.window_stride,
                     train_perturb=train_perturb,
                     val_perturb=val_perturb,
@@ -550,6 +581,7 @@ def run_robustness_mode(
                     "variant": variant["variant"],
                     "model": variant["model"],
                     "mixer": variant["mixer"],
+                    "target_mode": variant["target_mode"],
                     "vqc_vectorized": variant["vqc_vectorized"],
                     "vqc_backend": variant["vqc_backend"],
                     "window_stride": args.window_stride,

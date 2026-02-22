@@ -4,18 +4,23 @@ import numpy as np
 
 
 class PersistenceBaseline:
-    def __init__(self, n_features: int = 4) -> None:
+    def __init__(self, n_features: int = 4, target_mode: str = "value") -> None:
         self.n_features = n_features
+        self.target_mode = target_mode
         self.n_horizons: int | None = None
 
     def fit(self, x_train: np.ndarray, y_train: np.ndarray) -> "PersistenceBaseline":
         del x_train
+        if self.target_mode not in {"value", "delta"}:
+            raise ValueError(f"Unsupported target_mode for PersistenceBaseline: {self.target_mode}")
         self.n_horizons = y_train.shape[1]
         return self
 
     def predict(self, x: np.ndarray) -> np.ndarray:
         if self.n_horizons is None:
             raise RuntimeError("PersistenceBaseline must be fit before predict")
+        if self.target_mode == "delta":
+            return np.zeros((x.shape[0], self.n_horizons, self.n_features), dtype=np.float32)
         last_step = x[:, -1, : self.n_features]
         return np.repeat(last_step[:, None, :], repeats=self.n_horizons, axis=1)
 
@@ -55,4 +60,3 @@ class RidgePerHorizonBaseline:
         x_aug = np.concatenate([x_flat, np.ones((x_flat.shape[0], 1), dtype=np.float32)], axis=1)
         outputs = [x_aug @ w for w in self.weights]
         return np.stack(outputs, axis=1).astype(np.float32)
-

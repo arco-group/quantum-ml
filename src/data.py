@@ -145,7 +145,7 @@ def build_windows_for_subject(
     mask_channel: bool = False,
     missing_impute: str = "ffill_bfill",
     seed: int = 0,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     horizons = sorted(horizons)
     n_features = series.shape[1]
     input_features = n_features * 2 if mask_channel else n_features
@@ -158,10 +158,12 @@ def build_windows_for_subject(
         return (
             np.empty((0, l_window, input_features), dtype=np.float32),
             np.empty((0, len(horizons), n_features), dtype=np.float32),
+            np.empty((0, n_features), dtype=np.float32),
         )
 
     x_list: list[np.ndarray] = []
-    y_list: list[np.ndarray] = []
+    y_abs_list: list[np.ndarray] = []
+    anchor_list: list[np.ndarray] = []
     rng = np.random.default_rng(seed)
 
     for start in range(0, max_start, window_stride):
@@ -177,15 +179,22 @@ def build_windows_for_subject(
             mask_channel=mask_channel,
             missing_impute=missing_impute,
         )
+        anchor_value = x[-1, :n_features].astype(np.float32, copy=False)
         x_list.append(x)
-        y_list.append(y)
+        y_abs_list.append(y)
+        anchor_list.append(anchor_value)
 
     if not x_list:
         return (
             np.empty((0, l_window, input_features), dtype=np.float32),
             np.empty((0, len(horizons), n_features), dtype=np.float32),
+            np.empty((0, n_features), dtype=np.float32),
         )
-    return np.stack(x_list, axis=0), np.stack(y_list, axis=0)
+    return (
+        np.stack(x_list, axis=0),
+        np.stack(y_abs_list, axis=0),
+        np.stack(anchor_list, axis=0),
+    )
 
 
 def build_windows_for_subjects(
@@ -198,20 +207,22 @@ def build_windows_for_subjects(
     mask_channel: bool = False,
     missing_impute: str = "ffill_bfill",
     seed: int = 0,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     n_features = next(iter(subject_series.values())).shape[1]
     input_features = n_features * 2 if mask_channel else n_features
     if not subjects:
         return (
             np.empty((0, l_window, input_features), dtype=np.float32),
             np.empty((0, len(horizons), n_features), dtype=np.float32),
+            np.empty((0, n_features), dtype=np.float32),
         )
 
     x_blocks: list[np.ndarray] = []
-    y_blocks: list[np.ndarray] = []
+    y_abs_blocks: list[np.ndarray] = []
+    anchor_blocks: list[np.ndarray] = []
     for idx, subject in enumerate(sorted(subjects, key=int)):
         local_seed = seed + int(subject) + (idx * 104729)
-        x_sub, y_sub = build_windows_for_subject(
+        x_sub, y_abs_sub, anchor_sub = build_windows_for_subject(
             series=subject_series[subject],
             l_window=l_window,
             horizons=horizons,
@@ -224,14 +235,32 @@ def build_windows_for_subjects(
         if x_sub.shape[0] == 0:
             continue
         x_blocks.append(x_sub)
-        y_blocks.append(y_sub)
+        y_abs_blocks.append(y_abs_sub)
+        anchor_blocks.append(anchor_sub)
 
     if not x_blocks:
         return (
             np.empty((0, l_window, input_features), dtype=np.float32),
             np.empty((0, len(horizons), n_features), dtype=np.float32),
+            np.empty((0, n_features), dtype=np.float32),
         )
-    return np.concatenate(x_blocks, axis=0), np.concatenate(y_blocks, axis=0)
+    return (
+        np.concatenate(x_blocks, axis=0),
+        np.concatenate(y_abs_blocks, axis=0),
+        np.concatenate(anchor_blocks, axis=0),
+    )
+
+
+def to_target_space(
+    y_abs: np.ndarray,
+    anchors: np.ndarray,
+    target_mode: str,
+) -> np.ndarray:
+    if target_mode == "value":
+        return y_abs.astype(np.float32)
+    if target_mode == "delta":
+        return (y_abs - anchors[:, None, :]).astype(np.float32)
+    raise ValueError(f"Unsupported target_mode: {target_mode}")
 
 
 def prepare_split_data(
@@ -241,6 +270,7 @@ def prepare_split_data(
     test_subject: str,
     l_window: int,
     horizons: Sequence[int],
+    target_mode: str = "value",
     window_stride: int = 1,
     train_perturb: PerturbConfig | None = None,
     val_perturb: PerturbConfig | None = None,
@@ -252,7 +282,7 @@ def prepare_split_data(
     mean, std = compute_feature_stats(subject_series=subject_series, train_subjects=train_subjects)
     standardized = standardize_subject_series(subject_series, mean=mean, std=std)
 
-    x_train, y_train = build_windows_for_subjects(
+    x_train, y_train_abs, anchor_train = build_windows_for_subjects(
         subject_series=standardized,
         subjects=train_subjects,
         l_window=l_window,
@@ -263,7 +293,7 @@ def prepare_split_data(
         missing_impute=missing_impute,
         seed=seed + 11,
     )
-    x_val, y_val = build_windows_for_subjects(
+    x_val, y_val_abs, anchor_val = build_windows_for_subjects(
         subject_series=standardized,
         subjects=val_subjects,
         l_window=l_window,
@@ -274,7 +304,7 @@ def prepare_split_data(
         missing_impute=missing_impute,
         seed=seed + 23,
     )
-    x_test, y_test = build_windows_for_subjects(
+    x_test, y_test_abs, anchor_test = build_windows_for_subjects(
         subject_series=standardized,
         subjects=[test_subject],
         l_window=l_window,
@@ -285,14 +315,23 @@ def prepare_split_data(
         missing_impute=missing_impute,
         seed=seed + 37,
     )
+    y_train = to_target_space(y_abs=y_train_abs, anchors=anchor_train, target_mode=target_mode)
+    y_val = to_target_space(y_abs=y_val_abs, anchors=anchor_val, target_mode=target_mode)
+    y_test = to_target_space(y_abs=y_test_abs, anchors=anchor_test, target_mode=target_mode)
 
     return {
         "x_train": x_train,
         "y_train": y_train,
+        "y_train_abs": y_train_abs,
+        "anchor_train": anchor_train,
         "x_val": x_val,
         "y_val": y_val,
+        "y_val_abs": y_val_abs,
+        "anchor_val": anchor_val,
         "x_test": x_test,
         "y_test": y_test,
+        "y_test_abs": y_test_abs,
+        "anchor_test": anchor_test,
         "mean": mean,
         "std": std,
     }

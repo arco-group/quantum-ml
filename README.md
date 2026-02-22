@@ -45,6 +45,7 @@ Windowing:
 - input `L=240` (default)
 - target multi-horizon da `--horizons` (default `15,30,60`)
 - `Y[i] = X[t + h_i]` con `t` ultimo timestamp della finestra input.
+- `--target_mode value` (default) oppure `--target_mode delta` (`Y_delta = Y_abs - X[t]`)
 
 ## Esecuzione standard (LOPO)
 
@@ -52,6 +53,12 @@ Baseline GRU:
 
 ```bash
 python train_lopo.py --model gru_mixer --mixer none
+```
+
+Versione delta-target (valutazione sempre in valore assoluto):
+
+```bash
+python train_lopo.py --model gru_mixer --mixer none --target_mode delta
 ```
 
 Run singolo fold LOPO (utile per job array):
@@ -194,6 +201,9 @@ Output:
 - `--window_stride`:
   - `1` (default): usa tutte le finestre
   - `>1`: sottocampiona le finestre (piu veloce, meno sample)
+- `--target_mode`:
+  - `value` (default): predice direttamente i valori futuri
+  - `delta`: predice differenze rispetto all'ultimo punto input; metriche comunque calcolate su valori assoluti ricostruiti
 - `--test_subject`:
   - default vuoto: esegue tutti i fold LOPO
   - es. `01` o `1`: esegue solo il fold con quel soggetto in test
