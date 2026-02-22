@@ -39,6 +39,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["auto", "lightning.gpu", "lightning.qubit", "default.qubit", "default.qubit.torch"],
     )
     parser.add_argument("--L", type=int, default=240)
+    parser.add_argument("--window_stride", type=int, default=1)
     parser.add_argument("--horizons", type=str, default="15,30,60")
     parser.add_argument("--nan_strategy", type=str, default="ffill_bfill", choices=["ffill_bfill", "drop"])
     parser.add_argument("--seed", type=int, default=0)
@@ -301,6 +302,7 @@ def run_standard_mode(
             test_subject=test_subject,
             l_window=args.L,
             horizons=horizons,
+            window_stride=args.window_stride,
             mask_channel=False,
             missing_impute=args.missing_impute,
             seed=args.seed + fold_idx * 1000,
@@ -330,6 +332,7 @@ def run_standard_mode(
             "vqc_entangle": setting["vqc_entangle"],
             "vqc_vectorized": setting["vqc_vectorized"],
             "vqc_backend": setting["vqc_backend"],
+            "window_stride": args.window_stride,
             "n_train_subjects": len(train_subjects),
             "n_val_subjects": len(val_subjects),
             "n_train_windows": int(split_data["x_train"].shape[0]),
@@ -385,6 +388,7 @@ def run_data_efficiency_mode(
                     test_subject=test_subject,
                     l_window=args.L,
                     horizons=horizons,
+                    window_stride=args.window_stride,
                     mask_channel=False,
                     missing_impute=args.missing_impute,
                     seed=args.seed + fold_idx * 1000 + frac_idx * 10,
@@ -413,6 +417,7 @@ def run_data_efficiency_mode(
                     "mixer": variant["mixer"],
                     "vqc_vectorized": variant["vqc_vectorized"],
                     "vqc_backend": variant["vqc_backend"],
+                    "window_stride": args.window_stride,
                     "train_fraction": float(fraction),
                     "n_train_subjects": len(sampled_train),
                     "n_val_subjects": len(val_subjects),
@@ -469,6 +474,7 @@ def run_robustness_mode(
                     test_subject=test_subject,
                     l_window=args.L,
                     horizons=horizons,
+                    window_stride=args.window_stride,
                     train_perturb=train_perturb,
                     val_perturb=val_perturb,
                     test_perturb=test_perturb,
@@ -501,6 +507,7 @@ def run_robustness_mode(
                     "mixer": variant["mixer"],
                     "vqc_vectorized": variant["vqc_vectorized"],
                     "vqc_backend": variant["vqc_backend"],
+                    "window_stride": args.window_stride,
                     "perturb_type": args.perturb_type,
                     "perturb_target": args.perturb_target,
                     "perturb_level": float(level),
@@ -528,6 +535,8 @@ def main() -> None:
     horizons = sorted(parse_int_csv(args.horizons))
     if not horizons:
         raise ValueError("At least one horizon is required")
+    if args.window_stride <= 0:
+        raise ValueError("--window_stride must be > 0")
 
     output_dir = ensure_dir(args.output_dir)
     ensure_dir(output_dir / "histories")

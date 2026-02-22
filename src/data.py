@@ -140,6 +140,7 @@ def build_windows_for_subject(
     series: np.ndarray,
     l_window: int,
     horizons: Sequence[int],
+    window_stride: int = 1,
     perturb: PerturbConfig | None = None,
     mask_channel: bool = False,
     missing_impute: str = "ffill_bfill",
@@ -150,6 +151,8 @@ def build_windows_for_subject(
     input_features = n_features * 2 if mask_channel else n_features
     max_horizon = max(horizons)
     max_start = series.shape[0] - l_window - max_horizon + 1
+    if window_stride <= 0:
+        raise ValueError(f"window_stride must be > 0, got {window_stride}")
 
     if max_start <= 0:
         return (
@@ -161,7 +164,7 @@ def build_windows_for_subject(
     y_list: list[np.ndarray] = []
     rng = np.random.default_rng(seed)
 
-    for start in range(max_start):
+    for start in range(0, max_start, window_stride):
         x = series[start : start + l_window].astype(np.float32, copy=True)
         anchor = start + l_window - 1
         y = np.stack([series[anchor + h] for h in horizons], axis=0).astype(np.float32)
@@ -190,6 +193,7 @@ def build_windows_for_subjects(
     subjects: Sequence[str],
     l_window: int,
     horizons: Sequence[int],
+    window_stride: int = 1,
     perturb: PerturbConfig | None = None,
     mask_channel: bool = False,
     missing_impute: str = "ffill_bfill",
@@ -211,6 +215,7 @@ def build_windows_for_subjects(
             series=subject_series[subject],
             l_window=l_window,
             horizons=horizons,
+            window_stride=window_stride,
             perturb=perturb,
             mask_channel=mask_channel,
             missing_impute=missing_impute,
@@ -236,6 +241,7 @@ def prepare_split_data(
     test_subject: str,
     l_window: int,
     horizons: Sequence[int],
+    window_stride: int = 1,
     train_perturb: PerturbConfig | None = None,
     val_perturb: PerturbConfig | None = None,
     test_perturb: PerturbConfig | None = None,
@@ -251,6 +257,7 @@ def prepare_split_data(
         subjects=train_subjects,
         l_window=l_window,
         horizons=horizons,
+        window_stride=window_stride,
         perturb=train_perturb,
         mask_channel=mask_channel,
         missing_impute=missing_impute,
@@ -261,6 +268,7 @@ def prepare_split_data(
         subjects=val_subjects,
         l_window=l_window,
         horizons=horizons,
+        window_stride=window_stride,
         perturb=val_perturb,
         mask_channel=mask_channel,
         missing_impute=missing_impute,
@@ -271,6 +279,7 @@ def prepare_split_data(
         subjects=[test_subject],
         l_window=l_window,
         horizons=horizons,
+        window_stride=window_stride,
         perturb=test_perturb,
         mask_channel=mask_channel,
         missing_impute=missing_impute,
@@ -287,4 +296,3 @@ def prepare_split_data(
         "mean": mean,
         "std": std,
     }
-

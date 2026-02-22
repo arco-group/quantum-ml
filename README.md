@@ -105,6 +105,7 @@ python train_lopo.py \
   --model gru_mixer \
   --exp_mode data_efficiency \
   --L 240 \
+  --window_stride 1 \
   --horizons 15,30,60 \
   --seed 0 \
   --output_dir runs/de
@@ -184,6 +185,9 @@ Output:
 - `--nan_strategy`:
   - `ffill_bfill` (default)
   - `drop` (scarta finestre con NaN)
+- `--window_stride`:
+  - `1` (default): usa tutte le finestre
+  - `>1`: sottocampiona le finestre (piu veloce, meno sample)
 - `--vqc_backend`:
   - `auto` (default): prova `lightning.gpu` su host CUDA, altrimenti fallback CPU
   - `lightning.gpu`, `lightning.qubit`, `default.qubit`, `default.qubit.torch`
