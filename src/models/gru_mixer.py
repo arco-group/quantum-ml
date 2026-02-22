@@ -6,7 +6,6 @@ import torch
 from torch import nn
 
 from src.models.vqc import VQCLayer
-from src.models.vqc_torchquantum import TorchQuantumVQCLayer
 
 
 class GRUMixerModel(nn.Module):
@@ -24,14 +23,12 @@ class GRUMixerModel(nn.Module):
         vqc_backend: str = "auto",
         vqc_prefer_gpu: bool = False,
         vqc_vectorized: bool = True,
-        vqc_library: str = "pennylane",
     ) -> None:
         super().__init__()
         self.horizons = list(horizons)
         self.output_dim = output_dim
         self.hidden_dim = hidden_dim
         self.mixer = mixer
-        self.vqc_library = vqc_library
 
         self.encoder = nn.GRU(
             input_size=input_dim,
@@ -55,23 +52,14 @@ class GRUMixerModel(nn.Module):
             head_in_dim = hidden_dim + mlp_dim
         elif mixer == "vqc":
             self.to_qubits = nn.Linear(hidden_dim, n_qubits)
-            if vqc_library == "pennylane":
-                self.mixer_block = VQCLayer(
-                    n_qubits=n_qubits,
-                    depth=vqc_depth,
-                    entangle=vqc_entangle,
-                    device_name=vqc_backend,
-                    prefer_gpu=vqc_prefer_gpu,
-                    vectorized=vqc_vectorized,
-                )
-            elif vqc_library == "torchquantum":
-                self.mixer_block = TorchQuantumVQCLayer(
-                    n_qubits=n_qubits,
-                    depth=vqc_depth,
-                    entangle=vqc_entangle,
-                )
-            else:
-                raise ValueError(f"Unsupported vqc_library: {vqc_library}")
+            self.mixer_block = VQCLayer(
+                n_qubits=n_qubits,
+                depth=vqc_depth,
+                entangle=vqc_entangle,
+                device_name=vqc_backend,
+                prefer_gpu=vqc_prefer_gpu,
+                vectorized=vqc_vectorized,
+            )
             head_in_dim = hidden_dim + n_qubits
         else:
             raise ValueError(f"Unsupported mixer: {mixer}")

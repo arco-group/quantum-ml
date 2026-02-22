@@ -28,7 +28,6 @@ pip install numpy pandas torch matplotlib
 pip install pennylane  # obbligatorio solo per mixer=vqc
 pip install pennylane-lightning  # consigliato (backend lightning.qubit)
 # pip install pennylane-lightning-gpu  # opzionale per backend lightning.gpu
-pip install torchquantum  # opzionale: alternativa a pennylane per mixer=vqc
 ```
 
 ## Dataset atteso
@@ -63,7 +62,7 @@ python train_lopo.py --model gru_mixer --mixer mlp
 VQC con entanglement:
 
 ```bash
-python train_lopo.py --model gru_mixer --mixer vqc --vqc_library pennylane --n_qubits 6 --vqc_depth 3 --vqc_entangle 1
+python train_lopo.py --model gru_mixer --mixer vqc --n_qubits 6 --vqc_depth 3 --vqc_entangle 1
 ```
 
 VQC con tentativo backend GPU (se disponibile):
@@ -76,12 +75,6 @@ VQC forzato su `lightning.gpu` (errore se plugin non presente):
 
 ```bash
 python train_lopo.py --model gru_mixer --mixer vqc --vqc_backend lightning.gpu --device cuda
-```
-
-VQC con TorchQuantum (stessa architettura):
-
-```bash
-python train_lopo.py --model gru_mixer --mixer vqc --vqc_library torchquantum --n_qubits 6 --vqc_depth 3 --vqc_entangle 1 --device cuda
 ```
 
 VQC senza entanglement:
@@ -196,7 +189,4 @@ Output:
 - `--vqc_vectorized`:
   - `1` (default): prova inferenza/training batched nel VQC, con fallback automatico a loop per-sample
   - `0`: forza modalità per-sample (più lenta ma utile per debug)
-- `--vqc_library`:
-  - `pennylane` (default)
-  - `torchquantum` (alternativa; `--vqc_backend` viene ignorato)
 - Seed fisso con `--seed`.
