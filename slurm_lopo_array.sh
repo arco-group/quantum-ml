@@ -1,13 +1,11 @@
 #!/bin/bash
-#SBATCH -J qml_lopo
-#SBATCH -A naiss2023-6-336
-#SBATCH -p main
+#!/usr/bin/env bash
+#SBATCH -A naiss2025-5-662 -p alvis
+#SBATCH -N 1 --gpus-per-node=V100:1
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=16G
-#SBATCH -t 08:00:00
+#SBATCH -t 01:00:00
 #SBATCH -o logs/%x_%A_%a.out
 #SBATCH -e logs/%x_%A_%a.err
-# Note: set --array when submitting, e.g. --array=0-52%8
 
 set -euo pipefail
 

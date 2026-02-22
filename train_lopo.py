@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+#SBATCH -C NOGPU -c 4
 from __future__ import annotations
 
 import argparse
