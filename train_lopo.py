@@ -53,6 +53,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--ridge_alpha", type=float, default=1.0)
     parser.add_argument("--mlp_dim", type=int, default=6)
     parser.add_argument("--max_folds", type=int, default=0, help="0 means all LOPO folds")
+    parser.add_argument(
+        "--test_subject",
+        type=str,
+        default="",
+        help="Run only the LOPO fold with this test subject id (e.g. 1 or 01)",
+    )
 
     parser.add_argument(
         "--exp_mode",
@@ -276,6 +282,44 @@ def trim_folds(
     if max_folds <= 0:
         return folds
     return folds[:max_folds]
+
+
+def _canonical_subject_id(subject: str, available: list[str]) -> str:
+    if not available:
+        raise ValueError("No available subjects found")
+    wanted = subject.strip()
+    if not wanted:
+        raise ValueError("Empty test subject")
+
+    if wanted in available:
+        return wanted
+    try:
+        wanted_int = int(wanted)
+    except ValueError as exc:
+        raise ValueError(f"Invalid test subject '{subject}'") from exc
+
+    for candidate in available:
+        if int(candidate) == wanted_int:
+            return candidate
+    raise ValueError(
+        f"Requested test subject '{subject}' not found. "
+        f"Available: {', '.join(sorted(available, key=int))}"
+    )
+
+
+def select_folds(
+    folds: list[tuple[str, list[str]]],
+    test_subject: str,
+    max_folds: int,
+) -> list[tuple[str, list[str]]]:
+    selected = folds
+    if test_subject.strip():
+        canonical = _canonical_subject_id(
+            subject=test_subject,
+            available=[fold_subject for fold_subject, _ in folds],
+        )
+        selected = [fold for fold in folds if fold[0] == canonical]
+    return trim_folds(selected, max_folds=max_folds)
 
 
 def run_standard_mode(
@@ -550,7 +594,14 @@ def main() -> None:
         features=FEATURES,
         nan_strategy=args.nan_strategy,
     )
-    folds = trim_folds(lopo_folds(sorted(subject_series.keys(), key=int)), args.max_folds)
+    all_folds = lopo_folds(sorted(subject_series.keys(), key=int))
+    folds = select_folds(
+        folds=all_folds,
+        test_subject=args.test_subject,
+        max_folds=args.max_folds,
+    )
+    if args.test_subject.strip():
+        logger.info("Filtered to single test subject=%s", folds[0][0])
     logger.info("Subjects=%d Folds=%d Horizons=%s", len(subject_series), len(folds), horizons)
 
     if args.exp_mode == "standard":

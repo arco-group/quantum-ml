@@ -54,6 +54,12 @@ Baseline GRU:
 python train_lopo.py --model gru_mixer --mixer none
 ```
 
+Run singolo fold LOPO (utile per job array):
+
+```bash
+python train_lopo.py --model gru_mixer --mixer none --test_subject 01
+```
+
 Ablation non-quantum:
 
 ```bash
@@ -188,6 +194,9 @@ Output:
 - `--window_stride`:
   - `1` (default): usa tutte le finestre
   - `>1`: sottocampiona le finestre (piu veloce, meno sample)
+- `--test_subject`:
+  - default vuoto: esegue tutti i fold LOPO
+  - es. `01` o `1`: esegue solo il fold con quel soggetto in test
 - `--vqc_backend`:
   - `auto` (default): prova `lightning.gpu` su host CUDA, altrimenti fallback CPU
   - `lightning.gpu`, `lightning.qubit`, `default.qubit`, `default.qubit.torch`
@@ -195,3 +204,46 @@ Output:
   - `1` (default): prova inferenza/training batched nel VQC, con fallback automatico a loop per-sample
   - `0`: forza modalità per-sample (più lenta ma utile per debug)
 - Seed fisso con `--seed`.
+
+## SLURM Job Array
+
+Script inclusi in root:
+
+- `slurm_lopo_array.sh`: lancia un fold per task array (usa `--test_subject`).
+- `merge_lopo_runs.py`: unisce risultati per-soggetto in un unico `.xlsx`.
+- `slurm_merge_results.sh`: wrapper SLURM per merge finale.
+
+Rendi eseguibili gli script:
+
+```bash
+chmod +x slurm_lopo_array.sh slurm_merge_results.sh
+```
+
+Esempio submit baseline `GRU+none` su tutti i 53 soggetti:
+
+```bash
+sbatch --array=0-52%8 \
+  --export=ALL,RUN_TAG=std_gru_none,EXP_MODE=standard,MODEL=gru_mixer,MIXER=none \
+  slurm_lopo_array.sh
+```
+
+Esempio submit `GRU+VQC` CPU (`lightning.qubit`):
+
+```bash
+sbatch --array=0-52%8 \
+  --export=ALL,RUN_TAG=std_gru_vqc,EXP_MODE=standard,MODEL=gru_mixer,MIXER=vqc,DEVICE=cpu,EXTRA_ARGS="--vqc_backend lightning.qubit --vqc_vectorized 1 --vqc_entangle 1" \
+  slurm_lopo_array.sh
+```
+
+Merge finale risultati:
+
+```bash
+python merge_lopo_runs.py --runs_root runs/jobarray/std_gru_none
+```
+
+Submit merge come job dipendente:
+
+```bash
+jid=$(sbatch --array=0-52%8 --export=ALL,RUN_TAG=std_gru_none,EXP_MODE=standard,MODEL=gru_mixer,MIXER=none slurm_lopo_array.sh | awk '{print $4}')
+sbatch --dependency=afterok:${jid} --export=ALL,RUN_TAG=std_gru_none slurm_merge_results.sh
+```
