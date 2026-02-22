@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #SBATCH -A naiss2025-5-662 -p alvis
-#SBATCH -C NOGPU
+#SBATCH -N 1 --gpus-per-node=V100:1
 #SBATCH --ntasks-per-node=1
-#SBATCH -t 00-01:00:00
+#SBATCH -t 00-05:00:00
 # Output files
 #SBATCH --error=outputs/job_%J.err
 #SBATCH --output=outputs/out_%J.out
@@ -25,4 +25,4 @@ source bin/activate
 cd /mimer/NOBACKUP/groups/naiss2023-6-336/mtortora/quantum-ml || exit
 
 # RUN YOUR PROGRAM
-python train_lopo.py --model gru_mixer --mixer vqc --n_qubits 6 --vqc_depth 3 --vqc_entangle 1 --output_dir runs/VQC --device cpu --vqc_backend default.qubit
+python train_lopo.py --model gru_mixer --mixer vqc --n_qubits 6 --vqc_depth 3 --vqc_entangle 1 --output_dir runs/VQC_gpu --device cpu --vqc_backend default.qubit

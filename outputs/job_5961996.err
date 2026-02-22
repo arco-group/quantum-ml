@@ -1,0 +1,6 @@
+/mimer/NOBACKUP/groups/naiss2023-6-336/mtortora/quantum-ml/quantum-venv/lib/python3.11/site-packages/pennylane/__init__.py:212: PennyLaneDeprecationWarning: PennyLane v0.44 has dropped maintainence support for NumPy < 2.0.0. You have version 1.25.1 installed. Future versions of PennyLane will not work with NumPy<2.0. Please consider upgrading NumPy using `python -m pip install numpy --upgrade`. 
+  warnings.warn(
+2026-02-22 02:42:23,372 | INFO | Loading subject data from Data
+2026-02-22 02:42:23,651 | INFO | Subjects=53 Folds=53 Horizons=[15, 30, 60]
+2026-02-22 02:42:23,846 | INFO | run=fold_01_gru_mixer_vqc using vqc_backend=default.qubit on device=cpu
+2026-02-22 02:42:23,846 | INFO | run=fold_01_gru_mixer_vqc model=gru_mixer mixer=vqc params=14736 device=cpu
