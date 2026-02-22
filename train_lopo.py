@@ -31,6 +31,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--n_qubits", type=int, default=6)
     parser.add_argument("--vqc_depth", type=int, default=3)
     parser.add_argument("--vqc_entangle", type=int, default=1, choices=[0, 1])
+    parser.add_argument(
+        "--vqc_backend",
+        type=str,
+        default="auto",
+        choices=["auto", "lightning.gpu", "lightning.qubit", "default.qubit", "default.qubit.torch"],
+    )
     parser.add_argument("--L", type=int, default=240)
     parser.add_argument("--horizons", type=str, default="15,30,60")
     parser.add_argument("--nan_strategy", type=str, default="ffill_bfill", choices=["ffill_bfill", "drop"])
@@ -84,6 +90,7 @@ def build_torch_model(
     input_dim: int,
     horizons: list[int],
     l_window: int,
+    prefer_gpu: bool,
 ) -> torch.nn.Module:
     model_name = setting["model"]
     if model_name == "gru_mixer":
@@ -95,6 +102,8 @@ def build_torch_model(
             n_qubits=setting["n_qubits"],
             vqc_depth=setting["vqc_depth"],
             vqc_entangle=bool(setting["vqc_entangle"]),
+            vqc_backend=setting["vqc_backend"],
+            vqc_prefer_gpu=prefer_gpu,
         )
     if model_name == "transformer":
         return TinyTransformerModel(
@@ -140,23 +149,41 @@ def run_single_setting(
         y_true = y_test
     else:
         check_vqc_dependency(setting["mixer"])
-        force_cpu = setting["model"] == "gru_mixer" and setting["mixer"] == "vqc"
-        device = resolve_device(args.device, force_cpu=force_cpu)
-        if force_cpu and args.device != "cpu":
-            logger.info("run=%s forcing device=cpu for PennyLane VQC", run_name)
+        requested_device = resolve_device(args.device, force_cpu=False)
 
         model = build_torch_model(
             setting=setting,
             input_dim=x_train.shape[2],
             horizons=horizons,
             l_window=args.L,
+            prefer_gpu=requested_device.type == "cuda",
         )
+        device = requested_device
+        if setting["model"] == "gru_mixer" and setting["mixer"] == "vqc":
+            uses_gpu_backend = bool(getattr(model.mixer_block, "uses_gpu_backend", False))
+            backend_name = str(getattr(model.mixer_block, "device_name", "unknown"))
+            if requested_device.type == "cuda" and not uses_gpu_backend:
+                device = torch.device("cpu")
+                logger.info(
+                    "run=%s vqc_backend=%s is CPU-only; falling back to device=cpu",
+                    run_name,
+                    backend_name,
+                )
+            else:
+                logger.info(
+                    "run=%s using vqc_backend=%s on device=%s",
+                    run_name,
+                    backend_name,
+                    device,
+                )
+
         logger.info(
-            "run=%s model=%s mixer=%s params=%d",
+            "run=%s model=%s mixer=%s params=%d device=%s",
             run_name,
             setting["model"],
             setting["mixer"],
             count_parameters(model),
+            device,
         )
 
         train_loader = make_dataloader(
@@ -213,6 +240,7 @@ def base_setting_from_args(args: argparse.Namespace) -> dict[str, Any]:
         "n_qubits": args.n_qubits,
         "vqc_depth": args.vqc_depth,
         "vqc_entangle": args.vqc_entangle,
+        "vqc_backend": args.vqc_backend,
         "mlp_dim": args.mlp_dim if args.mlp_dim > 0 else args.n_qubits,
         "ridge_alpha": args.ridge_alpha,
     }
@@ -294,6 +322,7 @@ def run_standard_mode(
             "n_qubits": setting["n_qubits"],
             "vqc_depth": setting["vqc_depth"],
             "vqc_entangle": setting["vqc_entangle"],
+            "vqc_backend": setting["vqc_backend"],
             "n_train_subjects": len(train_subjects),
             "n_val_subjects": len(val_subjects),
             "n_train_windows": int(split_data["x_train"].shape[0]),
@@ -375,6 +404,7 @@ def run_data_efficiency_mode(
                     "variant": variant["variant"],
                     "model": variant["model"],
                     "mixer": variant["mixer"],
+                    "vqc_backend": variant["vqc_backend"],
                     "train_fraction": float(fraction),
                     "n_train_subjects": len(sampled_train),
                     "n_val_subjects": len(val_subjects),
@@ -461,6 +491,7 @@ def run_robustness_mode(
                     "variant": variant["variant"],
                     "model": variant["model"],
                     "mixer": variant["mixer"],
+                    "vqc_backend": variant["vqc_backend"],
                     "perturb_type": args.perturb_type,
                     "perturb_target": args.perturb_target,
                     "perturb_level": float(level),
@@ -518,4 +549,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

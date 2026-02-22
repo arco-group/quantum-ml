@@ -12,9 +12,52 @@ except Exception as exc:  # pragma: no cover - exercised only when PennyLane mis
     _HAS_PENNYLANE = False
     _PENNYLANE_IMPORT_ERROR = exc
 
+_GPU_BACKENDS = {"lightning.gpu"}
+
 
 def pennylane_available() -> bool:
     return _HAS_PENNYLANE
+
+
+def _can_build_device(device_name: str, n_qubits: int) -> bool:
+    try:
+        qml.device(device_name, wires=n_qubits)
+        return True
+    except Exception:
+        return False
+
+
+def resolve_vqc_backend(
+    requested: str,
+    prefer_gpu: bool,
+    n_qubits: int,
+) -> tuple[str, bool]:
+    if not _HAS_PENNYLANE:
+        raise ImportError(
+            "PennyLane is required for mixer='vqc'. Install with `pip install pennylane`."
+        ) from _PENNYLANE_IMPORT_ERROR
+
+    requested = requested.strip()
+    if requested != "auto":
+        if not _can_build_device(requested, n_qubits=n_qubits):
+            raise RuntimeError(
+                f"Requested VQC backend '{requested}' is not available in this environment."
+            )
+        return requested, requested in _GPU_BACKENDS
+
+    if prefer_gpu:
+        candidates = ["lightning.gpu", "lightning.qubit", "default.qubit.torch", "default.qubit"]
+    else:
+        candidates = ["lightning.qubit", "default.qubit.torch", "default.qubit"]
+
+    for device_name in candidates:
+        if _can_build_device(device_name, n_qubits=n_qubits):
+            return device_name, device_name in _GPU_BACKENDS
+
+    raise RuntimeError(
+        "No compatible PennyLane simulator backend found. "
+        "Install PennyLane plugins or pass --vqc_backend explicitly."
+    )
 
 
 class VQCLayer(nn.Module):
@@ -23,7 +66,8 @@ class VQCLayer(nn.Module):
         n_qubits: int = 6,
         depth: int = 3,
         entangle: bool = True,
-        device_name: str = "default.qubit.torch",
+        device_name: str = "auto",
+        prefer_gpu: bool = False,
     ) -> None:
         super().__init__()
         if not _HAS_PENNYLANE:
@@ -39,8 +83,13 @@ class VQCLayer(nn.Module):
         self.n_qubits = n_qubits
         self.depth = depth
         self.entangle = bool(entangle)
+        self.device_name, self.uses_gpu_backend = resolve_vqc_backend(
+            requested=device_name,
+            prefer_gpu=prefer_gpu,
+            n_qubits=n_qubits,
+        )
         self.weights = nn.Parameter(0.01 * torch.randn(depth, n_qubits, 3))
-        self.q_device = qml.device(device_name, wires=n_qubits)
+        self.q_device = qml.device(self.device_name, wires=n_qubits)
 
         n_qubits_local = self.n_qubits
         depth_local = self.depth
@@ -80,4 +129,3 @@ class VQCLayer(nn.Module):
                 sample_out = torch.stack(list(sample_out))
             batch_outputs.append(sample_out)
         return torch.stack(batch_outputs, dim=0).to(dtype=angles.dtype, device=angles.device)
-
