@@ -24,6 +24,12 @@ def main() -> None:
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--max_folds", type=int, default=0)
+    parser.add_argument(
+        "--vqc_library",
+        type=str,
+        default="pennylane",
+        choices=["pennylane", "torchquantum"],
+    )
     args = parser.parse_args()
 
     output_dir = ensure_dir(args.output_dir)
@@ -43,6 +49,8 @@ def main() -> None:
                 "gru_mixer",
                 "--mixer",
                 "vqc",
+                "--vqc_library",
+                args.vqc_library,
                 "--n_qubits",
                 str(n_qubits),
                 "--vqc_depth",
@@ -89,4 +97,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

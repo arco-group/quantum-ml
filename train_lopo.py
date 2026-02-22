@@ -13,6 +13,7 @@ from src.data import FEATURES, PerturbConfig, load_subject_series, prepare_split
 from src.eval import aggregate_rows, compute_metrics, save_rows_csv
 from src.models import GRUMixerModel, TinyTransformerModel
 from src.models.vqc import pennylane_available
+from src.models.vqc_torchquantum import torchquantum_available
 from src.splits import lopo_folds, sample_subject_fraction, split_train_val_subjects
 from src.train import count_parameters, fit_model, make_dataloader, predict_model
 from src.utils import ensure_dir, parse_float_csv, parse_int_csv, save_json, set_seed, setup_logger
@@ -32,6 +33,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--vqc_depth", type=int, default=3)
     parser.add_argument("--vqc_entangle", type=int, default=1, choices=[0, 1])
     parser.add_argument("--vqc_vectorized", type=int, default=1, choices=[0, 1])
+    parser.add_argument(
+        "--vqc_library",
+        type=str,
+        default="pennylane",
+        choices=["pennylane", "torchquantum"],
+    )
     parser.add_argument(
         "--vqc_backend",
         type=str,
@@ -78,12 +85,24 @@ def resolve_device(requested: str, force_cpu: bool = False) -> torch.device:
     return torch.device("cpu")
 
 
-def check_vqc_dependency(mixer: str) -> None:
-    if mixer == "vqc" and not pennylane_available():
-        raise RuntimeError(
-            "mixer=vqc richiesto ma PennyLane non e disponibile. "
-            "Installa `pennylane` oppure usa --mixer mlp."
-        )
+def check_vqc_dependency(mixer: str, vqc_library: str) -> None:
+    if mixer != "vqc":
+        return
+    if vqc_library == "pennylane":
+        if not pennylane_available():
+            raise RuntimeError(
+                "mixer=vqc con vqc_library=pennylane ma PennyLane non e disponibile. "
+                "Installa `pennylane` oppure usa --mixer mlp."
+            )
+        return
+    if vqc_library == "torchquantum":
+        if not torchquantum_available():
+            raise RuntimeError(
+                "mixer=vqc con vqc_library=torchquantum ma torchquantum non e disponibile. "
+                "Installa `torchquantum` oppure usa --vqc_library pennylane."
+            )
+        return
+    raise ValueError(f"Unsupported vqc_library: {vqc_library}")
 
 
 def build_torch_model(
@@ -106,6 +125,7 @@ def build_torch_model(
             vqc_backend=setting["vqc_backend"],
             vqc_prefer_gpu=prefer_gpu,
             vqc_vectorized=bool(setting["vqc_vectorized"]),
+            vqc_library=setting["vqc_library"],
         )
     if model_name == "transformer":
         return TinyTransformerModel(
@@ -150,7 +170,7 @@ def run_single_setting(
         y_pred = baseline.predict(x_test)
         y_true = y_test
     else:
-        check_vqc_dependency(setting["mixer"])
+        check_vqc_dependency(setting["mixer"], setting["vqc_library"])
         requested_device = resolve_device(args.device, force_cpu=False)
 
         model = build_torch_model(
@@ -162,24 +182,35 @@ def run_single_setting(
         )
         device = requested_device
         if setting["model"] == "gru_mixer" and setting["mixer"] == "vqc":
-            uses_gpu_backend = bool(getattr(model.mixer_block, "uses_gpu_backend", False))
-            backend_name = str(getattr(model.mixer_block, "device_name", "unknown"))
-            vectorized_enabled = bool(getattr(model.mixer_block, "vectorized_enabled", False))
-            if requested_device.type == "cuda" and not uses_gpu_backend:
-                device = torch.device("cpu")
-                logger.info(
-                    "run=%s vqc_backend=%s is CPU-only; falling back to device=cpu (vectorized=%s)",
-                    run_name,
-                    backend_name,
-                    vectorized_enabled,
-                )
+            if setting["vqc_library"] == "pennylane":
+                uses_gpu_backend = bool(getattr(model.mixer_block, "uses_gpu_backend", False))
+                backend_name = str(getattr(model.mixer_block, "device_name", "unknown"))
+                vectorized_enabled = bool(getattr(model.mixer_block, "vectorized_enabled", False))
+                if requested_device.type == "cuda" and not uses_gpu_backend:
+                    device = torch.device("cpu")
+                    logger.info(
+                        "run=%s vqc_library=%s backend=%s is CPU-only; "
+                        "falling back to device=cpu (vectorized=%s)",
+                        run_name,
+                        setting["vqc_library"],
+                        backend_name,
+                        vectorized_enabled,
+                    )
+                else:
+                    logger.info(
+                        "run=%s using vqc_library=%s backend=%s on device=%s (vectorized=%s)",
+                        run_name,
+                        setting["vqc_library"],
+                        backend_name,
+                        device,
+                        vectorized_enabled,
+                    )
             else:
                 logger.info(
-                    "run=%s using vqc_backend=%s on device=%s (vectorized=%s)",
+                    "run=%s using vqc_library=%s on device=%s",
                     run_name,
-                    backend_name,
+                    setting["vqc_library"],
                     device,
-                    vectorized_enabled,
                 )
 
         logger.info(
@@ -246,6 +277,7 @@ def base_setting_from_args(args: argparse.Namespace) -> dict[str, Any]:
         "vqc_depth": args.vqc_depth,
         "vqc_entangle": args.vqc_entangle,
         "vqc_vectorized": args.vqc_vectorized,
+        "vqc_library": args.vqc_library,
         "vqc_backend": args.vqc_backend,
         "mlp_dim": args.mlp_dim if args.mlp_dim > 0 else args.n_qubits,
         "ridge_alpha": args.ridge_alpha,
@@ -329,6 +361,7 @@ def run_standard_mode(
             "vqc_depth": setting["vqc_depth"],
             "vqc_entangle": setting["vqc_entangle"],
             "vqc_vectorized": setting["vqc_vectorized"],
+            "vqc_library": setting["vqc_library"],
             "vqc_backend": setting["vqc_backend"],
             "n_train_subjects": len(train_subjects),
             "n_val_subjects": len(val_subjects),
@@ -412,6 +445,7 @@ def run_data_efficiency_mode(
                     "model": variant["model"],
                     "mixer": variant["mixer"],
                     "vqc_vectorized": variant["vqc_vectorized"],
+                    "vqc_library": variant["vqc_library"],
                     "vqc_backend": variant["vqc_backend"],
                     "train_fraction": float(fraction),
                     "n_train_subjects": len(sampled_train),
@@ -500,6 +534,7 @@ def run_robustness_mode(
                     "model": variant["model"],
                     "mixer": variant["mixer"],
                     "vqc_vectorized": variant["vqc_vectorized"],
+                    "vqc_library": variant["vqc_library"],
                     "vqc_backend": variant["vqc_backend"],
                     "perturb_type": args.perturb_type,
                     "perturb_target": args.perturb_target,
