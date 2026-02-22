@@ -67,10 +67,10 @@ def main() -> None:
                 str(args.max_folds),
             ]
             subprocess.run(cmd, check=True)
-            agg_path = run_dir / "lopo_aggregate.csv"
+            agg_path = run_dir / "lopo_aggregate.xlsx"
             if not agg_path.exists():
                 continue
-            agg = pd.read_csv(agg_path)
+            agg = pd.read_excel(agg_path)
             if agg.empty:
                 continue
             row = {
@@ -84,7 +84,7 @@ def main() -> None:
             }
             rows.append(row)
 
-    pd.DataFrame(rows).to_csv(output_dir / "sweep_summary.csv", index=False)
+    pd.DataFrame(rows).to_excel(output_dir / "sweep_summary.xlsx", index=False)
 
 
 if __name__ == "__main__":

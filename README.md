@@ -25,6 +25,7 @@ src/
 
 ```bash
 pip install numpy pandas torch matplotlib
+pip install openpyxl  # necessario per output .xlsx
 pip install pennylane  # obbligatorio solo per mixer=vqc
 pip install pennylane-lightning  # consigliato (backend lightning.qubit)
 # pip install pennylane-lightning-gpu  # opzionale per backend lightning.gpu
@@ -92,10 +93,10 @@ python train_lopo.py --model ridge
 
 Output principali in `--output_dir`:
 
-- `lopo_fold_metrics.csv`
-- `lopo_aggregate.csv` (mean/std su soggetti test)
+- `lopo_fold_metrics.xlsx`
+- `lopo_aggregate.xlsx` (mean/std su soggetti test)
 - `checkpoints/*.pt`
-- `histories/*.csv`
+- `histories/*.xlsx`
 
 ## Data Efficiency
 
@@ -116,8 +117,8 @@ Confronto automatico:
 
 Output:
 
-- `data_efficiency_fold_metrics.csv`
-- `data_efficiency_summary.csv`
+- `data_efficiency_fold_metrics.xlsx`
+- `data_efficiency_summary.xlsx`
 
 ## Robustness
 
@@ -147,15 +148,15 @@ python train_lopo.py \
 
 Output:
 
-- `robustness_fold_metrics.csv`
-- `robustness_summary.csv`
+- `robustness_fold_metrics.xlsx`
+- `robustness_summary.xlsx`
 
 ## Plot curve
 
 ```bash
 python plot_curves.py \
-  --data_eff_csv runs/de/data_efficiency_summary.csv \
-  --robustness_csv runs/rob_miss/robustness_summary.csv \
+  --data_eff_file runs/de/data_efficiency_summary.xlsx \
+  --robustness_file runs/rob_miss/robustness_summary.xlsx \
   --metric macro_rmse \
   --output_dir runs/plots
 ```
@@ -173,7 +174,7 @@ python sweep_vqc.py --n_qubits_grid 4,6,8 --depth_grid 1,3 --output_dir runs/vqc
 
 Output:
 
-- `runs/vqc_sweep/sweep_summary.csv`
+- `runs/vqc_sweep/sweep_summary.xlsx`
 
 ## Note implementative
 

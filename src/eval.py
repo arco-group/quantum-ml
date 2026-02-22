@@ -44,9 +44,23 @@ def compute_metrics(
     return out
 
 
+def save_rows_table(rows: list[dict], path: str | Path) -> None:
+    target = Path(path)
+    ensure_dir(target.parent)
+    df = pd.DataFrame(rows)
+    suffix = target.suffix.lower()
+    if suffix == ".xlsx":
+        df.to_excel(target, index=False)
+        return
+    if suffix == ".csv":
+        df.to_csv(target, index=False)
+        return
+    raise ValueError(f"Unsupported table format '{suffix}'. Use .xlsx or .csv")
+
+
 def save_rows_csv(rows: list[dict], path: str | Path) -> None:
-    ensure_dir(Path(path).parent)
-    pd.DataFrame(rows).to_csv(path, index=False)
+    # Backward-compatible wrapper.
+    save_rows_table(rows, path)
 
 
 def aggregate_rows(
@@ -81,4 +95,3 @@ def aggregate_rows(
         row["count"] = int(frame.shape[0])
         summary.append(row)
     return summary
-

@@ -20,16 +20,25 @@ def _resolve_metric_cols(df: pd.DataFrame, metric: str) -> tuple[str, str | None
     raise ValueError(f"Metric '{metric}' not found in columns: {list(df.columns)}")
 
 
+def _read_table(path: Path) -> pd.DataFrame:
+    suffix = path.suffix.lower()
+    if suffix == ".xlsx":
+        return pd.read_excel(path)
+    if suffix == ".csv":
+        return pd.read_csv(path)
+    raise ValueError(f"Unsupported input format '{suffix}'. Use .xlsx or .csv")
+
+
 def _plot_data_efficiency(
-    csv_path: Path,
+    table_path: Path,
     metric: str,
     output_dir: Path,
 ) -> None:
-    df = pd.read_csv(csv_path)
+    df = _read_table(table_path)
     mean_col, std_col = _resolve_metric_cols(df, metric)
     group_col = "variant" if "variant" in df.columns else "model"
     if "train_fraction" not in df.columns:
-        raise ValueError("Expected 'train_fraction' column in data efficiency CSV")
+        raise ValueError("Expected 'train_fraction' column in data efficiency table")
 
     fig, ax = plt.subplots(figsize=(7, 4))
     for label, group in df.groupby(group_col):
@@ -52,15 +61,15 @@ def _plot_data_efficiency(
 
 
 def _plot_robustness(
-    csv_path: Path,
+    table_path: Path,
     metric: str,
     output_dir: Path,
 ) -> None:
-    df = pd.read_csv(csv_path)
+    df = _read_table(table_path)
     mean_col, std_col = _resolve_metric_cols(df, metric)
     group_col = "variant" if "variant" in df.columns else "model"
     if "perturb_level" not in df.columns:
-        raise ValueError("Expected 'perturb_level' column in robustness CSV")
+        raise ValueError("Expected 'perturb_level' column in robustness table")
 
     fig, ax = plt.subplots(figsize=(7, 4))
     for label, group in df.groupby(group_col):
@@ -85,25 +94,31 @@ def _plot_robustness(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Plot learning and robustness curves")
-    parser.add_argument("--data_eff_csv", type=str, default="")
-    parser.add_argument("--robustness_csv", type=str, default="")
+    parser.add_argument("--data_eff_file", "--data_eff_csv", dest="data_eff_file", type=str, default="")
+    parser.add_argument(
+        "--robustness_file",
+        "--robustness_csv",
+        dest="robustness_file",
+        type=str,
+        default="",
+    )
     parser.add_argument("--metric", type=str, default="macro_rmse")
     parser.add_argument("--output_dir", type=str, default=".")
     args = parser.parse_args()
 
     output_dir = ensure_dir(args.output_dir)
-    if not args.data_eff_csv and not args.robustness_csv:
-        raise ValueError("Provide at least one of --data_eff_csv or --robustness_csv")
+    if not args.data_eff_file and not args.robustness_file:
+        raise ValueError("Provide at least one of --data_eff_file or --robustness_file")
 
-    if args.data_eff_csv:
+    if args.data_eff_file:
         _plot_data_efficiency(
-            csv_path=Path(args.data_eff_csv),
+            table_path=Path(args.data_eff_file),
             metric=args.metric,
             output_dir=output_dir,
         )
-    if args.robustness_csv:
+    if args.robustness_file:
         _plot_robustness(
-            csv_path=Path(args.robustness_csv),
+            table_path=Path(args.robustness_file),
             metric=args.metric,
             output_dir=output_dir,
         )
@@ -111,4 +126,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

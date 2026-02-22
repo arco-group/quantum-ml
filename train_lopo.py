@@ -10,7 +10,7 @@ import torch
 
 from src.baselines import PersistenceBaseline, RidgePerHorizonBaseline
 from src.data import FEATURES, PerturbConfig, load_subject_series, prepare_split_data
-from src.eval import aggregate_rows, compute_metrics, save_rows_csv
+from src.eval import aggregate_rows, compute_metrics, save_rows_table
 from src.models import GRUMixerModel, TinyTransformerModel
 from src.models.vqc import pennylane_available
 from src.splits import lopo_folds, sample_subject_fraction, split_train_val_subjects
@@ -228,7 +228,7 @@ def run_single_setting(
             patience=args.patience,
             logger=logger,
         )
-        save_rows_csv(history, output_dir / "histories" / f"{run_name}.csv")
+        save_rows_table(history, output_dir / "histories" / f"{run_name}.xlsx")
 
         checkpoint = torch.load(checkpoint_path, map_location=device)
         model.load_state_dict(checkpoint["model_state_dict"])
@@ -339,9 +339,9 @@ def run_standard_mode(
         row.update(metrics)
         rows.append(row)
 
-    save_rows_csv(rows, output_dir / "lopo_fold_metrics.csv")
+    save_rows_table(rows, output_dir / "lopo_fold_metrics.xlsx")
     summary = aggregate_rows(rows, group_keys=["model", "mixer"])
-    save_rows_csv(summary, output_dir / "lopo_aggregate.csv")
+    save_rows_table(summary, output_dir / "lopo_aggregate.xlsx")
 
 
 def run_data_efficiency_mode(
@@ -423,9 +423,9 @@ def run_data_efficiency_mode(
                 row.update(metrics)
                 rows.append(row)
 
-    save_rows_csv(rows, output_dir / "data_efficiency_fold_metrics.csv")
+    save_rows_table(rows, output_dir / "data_efficiency_fold_metrics.xlsx")
     summary = aggregate_rows(rows, group_keys=["variant", "train_fraction"])
-    save_rows_csv(summary, output_dir / "data_efficiency_summary.csv")
+    save_rows_table(summary, output_dir / "data_efficiency_summary.xlsx")
 
 
 def run_robustness_mode(
@@ -514,12 +514,12 @@ def run_robustness_mode(
                 row.update(metrics)
                 rows.append(row)
 
-    save_rows_csv(rows, output_dir / "robustness_fold_metrics.csv")
+    save_rows_table(rows, output_dir / "robustness_fold_metrics.xlsx")
     summary = aggregate_rows(
         rows,
         group_keys=["variant", "perturb_type", "perturb_target", "mask_channel", "perturb_level"],
     )
-    save_rows_csv(summary, output_dir / "robustness_summary.csv")
+    save_rows_table(summary, output_dir / "robustness_summary.xlsx")
 
 
 def main() -> None:
