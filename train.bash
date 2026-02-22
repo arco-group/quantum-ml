@@ -25,4 +25,4 @@ source bin/activate
 cd /mimer/NOBACKUP/groups/naiss2023-6-336/mtortora/quantum-ml || exit
 
 # RUN YOUR PROGRAM
-python train_lopo.py --model gru_mixer --mixer vqc --n_qubits 6 --vqc_depth 3 --vqc_entangle 1 --output_dir runs/VQC
+python train_lopo.py --model gru_mixer --mixer vqc --n_qubits 6 --vqc_depth 3 --vqc_entangle 1 --output_dir runs/VQC --device cpu --vqc_backend default.qubit
