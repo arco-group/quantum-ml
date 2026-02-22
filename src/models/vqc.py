@@ -27,6 +27,14 @@ def _can_build_device(device_name: str, n_qubits: int) -> bool:
         return False
 
 
+def _resolve_diff_method(device_name: str) -> str:
+    # Lightning backends do not support torch backprop through the device.
+    # Use adjoint differentiation instead.
+    if device_name.startswith("lightning."):
+        return "adjoint"
+    return "backprop"
+
+
 def resolve_vqc_backend(
     requested: str,
     prefer_gpu: bool,
@@ -88,6 +96,7 @@ class VQCLayer(nn.Module):
             prefer_gpu=prefer_gpu,
             n_qubits=n_qubits,
         )
+        self.diff_method = _resolve_diff_method(self.device_name)
         self.weights = nn.Parameter(0.01 * torch.randn(depth, n_qubits, 3))
         self.q_device = qml.device(self.device_name, wires=n_qubits)
 
@@ -95,7 +104,7 @@ class VQCLayer(nn.Module):
         depth_local = self.depth
         entangle_local = self.entangle
 
-        @qml.qnode(self.q_device, interface="torch", diff_method="backprop")
+        @qml.qnode(self.q_device, interface="torch", diff_method=self.diff_method)
         def _circuit(angles: torch.Tensor, weights: torch.Tensor) -> torch.Tensor:
             for wire in range(n_qubits_local):
                 qml.RY(angles[wire], wires=wire)
