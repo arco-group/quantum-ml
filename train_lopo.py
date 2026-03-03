@@ -18,7 +18,15 @@ from src.baselines import (
 )
 from src.data import FEATURES, PerturbConfig, load_subject_series, prepare_split_data
 from src.eval import aggregate_rows, compute_metrics, save_rows_table
-from src.models import GRUMixerModel, LSTMTinyModel, TinyTCNModel, TinyTransformerModel
+from src.models import (
+    DLinearTinyModel,
+    GRUMixerModel,
+    LSTMTinyModel,
+    NHiTSTinyModel,
+    PatchTSTTinyModel,
+    TinyTCNModel,
+    TinyTransformerModel,
+)
 from src.models.vqc import pennylane_available
 from src.splits import lopo_folds, sample_subject_fraction, split_train_val_subjects
 from src.train import count_parameters, fit_model, make_dataloader, predict_model
@@ -34,6 +42,9 @@ def build_parser() -> argparse.ArgumentParser:
         default="gru_mixer",
         choices=[
             "gru_mixer",
+            "patchtst_tiny",
+            "dlinear",
+            "nhits_tiny",
             "lstm_tiny",
             "tcn",
             "transformer",
@@ -75,6 +86,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--tcn_levels", type=int, default=3)
     parser.add_argument("--tcn_kernel_size", type=int, default=3)
     parser.add_argument("--tcn_dropout", type=float, default=0.1)
+    parser.add_argument("--patch_len", type=int, default=16)
+    parser.add_argument("--patch_stride", type=int, default=8)
+    parser.add_argument("--patch_d_model", type=int, default=32)
+    parser.add_argument("--patch_nhead", type=int, default=4)
+    parser.add_argument("--patch_num_layers", type=int, default=1)
+    parser.add_argument("--patch_dim_feedforward", type=int, default=64)
+    parser.add_argument("--patch_dropout", type=float, default=0.1)
+    parser.add_argument("--dlinear_ma_window", type=int, default=25)
+    parser.add_argument("--nhits_blocks", type=int, default=2)
+    parser.add_argument("--nhits_hidden", type=int, default=32)
+    parser.add_argument("--nhits_dropout", type=float, default=0.1)
+    parser.add_argument("--nhits_pool_base", type=int, default=2)
     parser.add_argument("--transformer_d_model", type=int, default=32)
     parser.add_argument("--transformer_nhead", type=int, default=4)
     parser.add_argument("--transformer_num_layers", type=int, default=1)
@@ -176,6 +199,45 @@ def build_torch_model(
             input_dim=input_dim,
             horizons=horizons,
             hidden_dim=setting["lstm_hidden_dim"],
+        )
+    if model_name == "patchtst_tiny":
+        patch_len = int(setting["patch_len"])
+        patch_stride = int(setting["patch_stride"])
+        if patch_len <= 0 or patch_stride <= 0:
+            raise ValueError("patch_len and patch_stride must be > 0")
+        if patch_len > l_window:
+            raise ValueError(
+                f"patch_len={patch_len} cannot exceed input window length L={l_window}"
+            )
+        max_patches = 1 + (l_window - patch_len) // patch_stride
+        return PatchTSTTinyModel(
+            input_dim=input_dim,
+            horizons=horizons,
+            patch_len=patch_len,
+            patch_stride=patch_stride,
+            d_model=setting["patch_d_model"],
+            nhead=setting["patch_nhead"],
+            num_layers=setting["patch_num_layers"],
+            dim_feedforward=setting["patch_dim_feedforward"],
+            dropout=setting["patch_dropout"],
+            max_patches=max_patches,
+        )
+    if model_name == "dlinear":
+        return DLinearTinyModel(
+            input_dim=input_dim,
+            horizons=horizons,
+            seq_len=l_window,
+            ma_window=setting["dlinear_ma_window"],
+        )
+    if model_name == "nhits_tiny":
+        return NHiTSTinyModel(
+            input_dim=input_dim,
+            horizons=horizons,
+            seq_len=l_window,
+            n_blocks=setting["nhits_blocks"],
+            hidden_dim=setting["nhits_hidden"],
+            dropout=setting["nhits_dropout"],
+            pool_base=setting["nhits_pool_base"],
         )
     if model_name == "tcn":
         return TinyTCNModel(
@@ -416,6 +478,18 @@ def base_setting_from_args(args: argparse.Namespace) -> dict[str, Any]:
         "tcn_levels": args.tcn_levels,
         "tcn_kernel_size": args.tcn_kernel_size,
         "tcn_dropout": args.tcn_dropout,
+        "patch_len": args.patch_len,
+        "patch_stride": args.patch_stride,
+        "patch_d_model": args.patch_d_model,
+        "patch_nhead": args.patch_nhead,
+        "patch_num_layers": args.patch_num_layers,
+        "patch_dim_feedforward": args.patch_dim_feedforward,
+        "patch_dropout": args.patch_dropout,
+        "dlinear_ma_window": args.dlinear_ma_window,
+        "nhits_blocks": args.nhits_blocks,
+        "nhits_hidden": args.nhits_hidden,
+        "nhits_dropout": args.nhits_dropout,
+        "nhits_pool_base": args.nhits_pool_base,
         "transformer_d_model": args.transformer_d_model,
         "transformer_nhead": args.transformer_nhead,
         "transformer_num_layers": args.transformer_num_layers,
@@ -593,6 +667,18 @@ def run_standard_mode(
             "tcn_levels": setting["tcn_levels"],
             "tcn_kernel_size": setting["tcn_kernel_size"],
             "tcn_dropout": setting["tcn_dropout"],
+            "patch_len": setting["patch_len"],
+            "patch_stride": setting["patch_stride"],
+            "patch_d_model": setting["patch_d_model"],
+            "patch_nhead": setting["patch_nhead"],
+            "patch_num_layers": setting["patch_num_layers"],
+            "patch_dim_feedforward": setting["patch_dim_feedforward"],
+            "patch_dropout": setting["patch_dropout"],
+            "dlinear_ma_window": setting["dlinear_ma_window"],
+            "nhits_blocks": setting["nhits_blocks"],
+            "nhits_hidden": setting["nhits_hidden"],
+            "nhits_dropout": setting["nhits_dropout"],
+            "nhits_pool_base": setting["nhits_pool_base"],
             "xgb_n_estimators": setting["xgb_n_estimators"],
             "xgb_max_depth": setting["xgb_max_depth"],
             "xgb_learning_rate": setting["xgb_learning_rate"],
@@ -707,6 +793,18 @@ def run_data_efficiency_mode(
                     "tcn_levels": variant["tcn_levels"],
                     "tcn_kernel_size": variant["tcn_kernel_size"],
                     "tcn_dropout": variant["tcn_dropout"],
+                    "patch_len": variant["patch_len"],
+                    "patch_stride": variant["patch_stride"],
+                    "patch_d_model": variant["patch_d_model"],
+                    "patch_nhead": variant["patch_nhead"],
+                    "patch_num_layers": variant["patch_num_layers"],
+                    "patch_dim_feedforward": variant["patch_dim_feedforward"],
+                    "patch_dropout": variant["patch_dropout"],
+                    "dlinear_ma_window": variant["dlinear_ma_window"],
+                    "nhits_blocks": variant["nhits_blocks"],
+                    "nhits_hidden": variant["nhits_hidden"],
+                    "nhits_dropout": variant["nhits_dropout"],
+                    "nhits_pool_base": variant["nhits_pool_base"],
                     "xgb_n_estimators": variant["xgb_n_estimators"],
                     "xgb_max_depth": variant["xgb_max_depth"],
                     "xgb_learning_rate": variant["xgb_learning_rate"],
@@ -826,6 +924,18 @@ def run_robustness_mode(
                     "tcn_levels": variant["tcn_levels"],
                     "tcn_kernel_size": variant["tcn_kernel_size"],
                     "tcn_dropout": variant["tcn_dropout"],
+                    "patch_len": variant["patch_len"],
+                    "patch_stride": variant["patch_stride"],
+                    "patch_d_model": variant["patch_d_model"],
+                    "patch_nhead": variant["patch_nhead"],
+                    "patch_num_layers": variant["patch_num_layers"],
+                    "patch_dim_feedforward": variant["patch_dim_feedforward"],
+                    "patch_dropout": variant["patch_dropout"],
+                    "dlinear_ma_window": variant["dlinear_ma_window"],
+                    "nhits_blocks": variant["nhits_blocks"],
+                    "nhits_hidden": variant["nhits_hidden"],
+                    "nhits_dropout": variant["nhits_dropout"],
+                    "nhits_pool_base": variant["nhits_pool_base"],
                     "xgb_n_estimators": variant["xgb_n_estimators"],
                     "xgb_max_depth": variant["xgb_max_depth"],
                     "xgb_learning_rate": variant["xgb_learning_rate"],

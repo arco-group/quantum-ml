@@ -17,7 +17,10 @@ src/
   utils.py
   models/
     gru_mixer.py
+    dlinear.py
     lstm_tiny.py
+    nhits_tiny.py
+    patchtst_tiny.py
     tcn.py
     transformer.py
     vqc.py
@@ -111,6 +114,9 @@ python train_lopo.py --model xgboost_direct
 Nuove baseline comparabili a `GRU+VQC` (default):
 
 ```bash
+python train_lopo.py --model patchtst_tiny --patch_len 16 --patch_stride 8 --patch_d_model 32 --patch_nhead 4 --patch_num_layers 1
+python train_lopo.py --model dlinear --dlinear_ma_window 25
+python train_lopo.py --model nhits_tiny --nhits_blocks 2 --nhits_hidden 32 --nhits_pool_base 2
 python train_lopo.py --model lstm_tiny --lstm_hidden_dim 56
 python train_lopo.py --model tcn --tcn_channels 32 --tcn_levels 3 --tcn_kernel_size 3 --tcn_dropout 0.1
 python train_lopo.py --model xgboost_direct --xgb_n_estimators 16 --xgb_max_depth 6 --xgb_learning_rate 0.05
