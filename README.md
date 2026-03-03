@@ -163,7 +163,7 @@ python train_lopo.py \
   --missing_rates 0.0,0.1,0.3 \
   --perturb_target test \
   --mask_channel 1 \
-  --output_dir runs/rob_miss
+  --output_dir runs/rob_miss_new
 ```
 
 Noise (test-only):
@@ -174,7 +174,7 @@ python train_lopo.py \
   --exp_mode robustness \
   --perturb_type noise \
   --noise_sigmas 0.0,0.01,0.05 \
-  --output_dir runs/rob_noise
+  --output_dir runs/rob_noise_new
 ```
 
 Output:
@@ -202,10 +202,18 @@ Figure generate:
 ```bash
 python sweep_vqc.py --n_qubits_grid 4,6,8 --depth_grid 1,3 --output_dir runs/vqc_sweep
 ```
-
 Output:
 
 - `runs/vqc_sweep/sweep_summary.xlsx`
+
+
+```bash
+chmod +x submit_vqc_arrays.sh
+```
+
+Output:
+
+- `runs/jobarray/vqc_sweep/sweep_summary.xlsx`
 
 ## Note implementative
 

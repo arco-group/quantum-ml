@@ -8,7 +8,14 @@ from typing import Any
 import numpy as np
 import torch
 
-from src.baselines import PersistenceBaseline, RidgePerHorizonBaseline, XGBoostDirectBaseline
+from src.baselines import (
+    CNN1DDirectBaseline,
+    ExtraTreesDirectBaseline,
+    PersistenceBaseline,
+    RandomForestDirectBaseline,
+    RidgePerHorizonBaseline,
+    XGBoostDirectBaseline,
+)
 from src.data import FEATURES, PerturbConfig, load_subject_series, prepare_split_data
 from src.eval import aggregate_rows, compute_metrics, save_rows_table
 from src.models import GRUMixerModel, LSTMTinyModel, TinyTCNModel, TinyTransformerModel
@@ -25,7 +32,18 @@ def build_parser() -> argparse.ArgumentParser:
         "--model",
         type=str,
         default="gru_mixer",
-        choices=["gru_mixer", "lstm_tiny", "tcn", "transformer", "ridge", "persistence", "xgboost_direct"],
+        choices=[
+            "gru_mixer",
+            "lstm_tiny",
+            "tcn",
+            "transformer",
+            "ridge",
+            "persistence",
+            "xgboost_direct",
+            "extratrees_direct",
+            "random_forest_direct",
+            "cnn1d_direct",
+        ],
     )
     parser.add_argument("--mixer", type=str, default="none", choices=["none", "mlp", "vqc"])
     parser.add_argument("--n_qubits", type=int, default=6)
@@ -57,12 +75,39 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--tcn_levels", type=int, default=3)
     parser.add_argument("--tcn_kernel_size", type=int, default=3)
     parser.add_argument("--tcn_dropout", type=float, default=0.1)
+    parser.add_argument("--transformer_d_model", type=int, default=32)
+    parser.add_argument("--transformer_nhead", type=int, default=4)
+    parser.add_argument("--transformer_num_layers", type=int, default=1)
+    parser.add_argument("--transformer_dim_feedforward", type=int, default=64)
+    parser.add_argument("--transformer_dropout", type=float, default=0.1)
+    parser.add_argument(
+        "--transformer_max_len",
+        type=int,
+        default=0,
+        help="If >0, force max_len for transformer positional embeddings; 0 uses minimal required length.",
+    )
     parser.add_argument("--xgb_n_estimators", type=int, default=16)
     parser.add_argument("--xgb_max_depth", type=int, default=6)
     parser.add_argument("--xgb_learning_rate", type=float, default=0.05)
     parser.add_argument("--xgb_subsample", type=float, default=0.8)
     parser.add_argument("--xgb_colsample_bytree", type=float, default=0.8)
     parser.add_argument("--xgb_n_jobs", type=int, default=1)
+    parser.add_argument("--et_n_estimators", type=int, default=200)
+    parser.add_argument("--et_max_depth", type=int, default=0, help="0 means no max depth")
+    parser.add_argument("--et_min_samples_split", type=int, default=2)
+    parser.add_argument("--et_min_samples_leaf", type=int, default=1)
+    parser.add_argument("--et_n_jobs", type=int, default=1)
+    parser.add_argument("--rf_n_estimators", type=int, default=4)
+    parser.add_argument("--rf_max_depth", type=int, default=3, help="0 means no max depth")
+    parser.add_argument("--rf_min_samples_split", type=int, default=4)
+    parser.add_argument("--rf_min_samples_leaf", type=int, default=2)
+    parser.add_argument("--rf_n_jobs", type=int, default=1)
+    parser.add_argument("--cnn_channels", type=int, default=32)
+    parser.add_argument("--cnn_kernel_size", type=int, default=3)
+    parser.add_argument("--cnn_dropout", type=float, default=0.1)
+    parser.add_argument("--cnn_epochs", type=int, default=20)
+    parser.add_argument("--cnn_batch_size", type=int, default=128)
+    parser.add_argument("--cnn_lr", type=float, default=1e-3)
     parser.add_argument("--mlp_dim", type=int, default=6)
     parser.add_argument("--max_folds", type=int, default=0, help="0 means all LOPO folds")
     parser.add_argument(
@@ -142,10 +187,17 @@ def build_torch_model(
             dropout=setting["tcn_dropout"],
         )
     if model_name == "transformer":
+        min_required_len = l_window + max(horizons) + 32
+        max_len = int(setting["transformer_max_len"]) if int(setting["transformer_max_len"]) > 0 else min_required_len
         return TinyTransformerModel(
             input_dim=input_dim,
             horizons=horizons,
-            max_len=max(2048, l_window + max(horizons) + 32),
+            d_model=setting["transformer_d_model"],
+            nhead=setting["transformer_nhead"],
+            num_layers=setting["transformer_num_layers"],
+            dim_feedforward=setting["transformer_dim_feedforward"],
+            dropout=setting["transformer_dropout"],
+            max_len=max_len,
         )
     raise ValueError(f"Unsupported torch model: {model_name}")
 
@@ -200,6 +252,56 @@ def run_single_setting(
         y_pred_target = baseline.predict(x_test)
         logger.info(
             "run=%s model=xgboost_direct effective_params~%d",
+            run_name,
+            baseline.effective_param_count(),
+        )
+    elif setting["model"] == "extratrees_direct":
+        baseline = ExtraTreesDirectBaseline(
+            n_estimators=setting["et_n_estimators"],
+            max_depth=setting["et_max_depth"],
+            min_samples_split=setting["et_min_samples_split"],
+            min_samples_leaf=setting["et_min_samples_leaf"],
+            seed=args.seed,
+            n_jobs=setting["et_n_jobs"],
+        )
+        baseline.fit(x_train, y_train)
+        y_pred_target = baseline.predict(x_test)
+        logger.info(
+            "run=%s model=extratrees_direct effective_params~%d",
+            run_name,
+            baseline.effective_param_count(),
+        )
+    elif setting["model"] == "random_forest_direct":
+        baseline = RandomForestDirectBaseline(
+            n_estimators=setting["rf_n_estimators"],
+            max_depth=setting["rf_max_depth"],
+            min_samples_split=setting["rf_min_samples_split"],
+            min_samples_leaf=setting["rf_min_samples_leaf"],
+            seed=args.seed,
+            n_jobs=setting["rf_n_jobs"],
+        )
+        baseline.fit(x_train, y_train)
+        y_pred_target = baseline.predict(x_test)
+        logger.info(
+            "run=%s model=random_forest_direct effective_params~%d",
+            run_name,
+            baseline.effective_param_count(),
+        )
+    elif setting["model"] == "cnn1d_direct":
+        baseline = CNN1DDirectBaseline(
+            channels=setting["cnn_channels"],
+            kernel_size=setting["cnn_kernel_size"],
+            dropout=setting["cnn_dropout"],
+            epochs=setting["cnn_epochs"],
+            batch_size=setting["cnn_batch_size"],
+            lr=setting["cnn_lr"],
+            seed=args.seed,
+            device=args.device,
+        )
+        baseline.fit(x_train, y_train)
+        y_pred_target = baseline.predict(x_test)
+        logger.info(
+            "run=%s model=cnn1d_direct effective_params=%d",
             run_name,
             baseline.effective_param_count(),
         )
@@ -314,12 +416,34 @@ def base_setting_from_args(args: argparse.Namespace) -> dict[str, Any]:
         "tcn_levels": args.tcn_levels,
         "tcn_kernel_size": args.tcn_kernel_size,
         "tcn_dropout": args.tcn_dropout,
+        "transformer_d_model": args.transformer_d_model,
+        "transformer_nhead": args.transformer_nhead,
+        "transformer_num_layers": args.transformer_num_layers,
+        "transformer_dim_feedforward": args.transformer_dim_feedforward,
+        "transformer_dropout": args.transformer_dropout,
+        "transformer_max_len": args.transformer_max_len,
         "xgb_n_estimators": args.xgb_n_estimators,
         "xgb_max_depth": args.xgb_max_depth,
         "xgb_learning_rate": args.xgb_learning_rate,
         "xgb_subsample": args.xgb_subsample,
         "xgb_colsample_bytree": args.xgb_colsample_bytree,
         "xgb_n_jobs": args.xgb_n_jobs,
+        "et_n_estimators": args.et_n_estimators,
+        "et_max_depth": args.et_max_depth,
+        "et_min_samples_split": args.et_min_samples_split,
+        "et_min_samples_leaf": args.et_min_samples_leaf,
+        "et_n_jobs": args.et_n_jobs,
+        "rf_n_estimators": args.rf_n_estimators,
+        "rf_max_depth": args.rf_max_depth,
+        "rf_min_samples_split": args.rf_min_samples_split,
+        "rf_min_samples_leaf": args.rf_min_samples_leaf,
+        "rf_n_jobs": args.rf_n_jobs,
+        "cnn_channels": args.cnn_channels,
+        "cnn_kernel_size": args.cnn_kernel_size,
+        "cnn_dropout": args.cnn_dropout,
+        "cnn_epochs": args.cnn_epochs,
+        "cnn_batch_size": args.cnn_batch_size,
+        "cnn_lr": args.cnn_lr,
     }
 
 
@@ -331,13 +455,19 @@ def get_variant_settings(args: argparse.Namespace) -> list[dict[str, Any]]:
         "mixer": "none",
         "variant": "gru_none",
     }
+    mlp_variant = {
+        **base,
+        "model": "gru_mixer",
+        "mixer": "mlp",
+        "variant": "gru_mlp",
+    }
     vqc_variant = {
         **base,
         "model": "gru_mixer",
         "mixer": "vqc",
         "variant": "gru_vqc",
     }
-    return [none_variant, vqc_variant]
+    return [none_variant, mlp_variant, vqc_variant]
 
 
 def target_to_absolute(
@@ -469,6 +599,22 @@ def run_standard_mode(
             "xgb_subsample": setting["xgb_subsample"],
             "xgb_colsample_bytree": setting["xgb_colsample_bytree"],
             "xgb_n_jobs": setting["xgb_n_jobs"],
+            "et_n_estimators": setting["et_n_estimators"],
+            "et_max_depth": setting["et_max_depth"],
+            "et_min_samples_split": setting["et_min_samples_split"],
+            "et_min_samples_leaf": setting["et_min_samples_leaf"],
+            "et_n_jobs": setting["et_n_jobs"],
+            "rf_n_estimators": setting["rf_n_estimators"],
+            "rf_max_depth": setting["rf_max_depth"],
+            "rf_min_samples_split": setting["rf_min_samples_split"],
+            "rf_min_samples_leaf": setting["rf_min_samples_leaf"],
+            "rf_n_jobs": setting["rf_n_jobs"],
+            "cnn_channels": setting["cnn_channels"],
+            "cnn_kernel_size": setting["cnn_kernel_size"],
+            "cnn_dropout": setting["cnn_dropout"],
+            "cnn_epochs": setting["cnn_epochs"],
+            "cnn_batch_size": setting["cnn_batch_size"],
+            "cnn_lr": setting["cnn_lr"],
             "window_stride": args.window_stride,
             "n_train_subjects": len(train_subjects),
             "n_val_subjects": len(val_subjects),
@@ -567,6 +713,22 @@ def run_data_efficiency_mode(
                     "xgb_subsample": variant["xgb_subsample"],
                     "xgb_colsample_bytree": variant["xgb_colsample_bytree"],
                     "xgb_n_jobs": variant["xgb_n_jobs"],
+                    "et_n_estimators": variant["et_n_estimators"],
+                    "et_max_depth": variant["et_max_depth"],
+                    "et_min_samples_split": variant["et_min_samples_split"],
+                    "et_min_samples_leaf": variant["et_min_samples_leaf"],
+                    "et_n_jobs": variant["et_n_jobs"],
+                    "rf_n_estimators": variant["rf_n_estimators"],
+                    "rf_max_depth": variant["rf_max_depth"],
+                    "rf_min_samples_split": variant["rf_min_samples_split"],
+                    "rf_min_samples_leaf": variant["rf_min_samples_leaf"],
+                    "rf_n_jobs": variant["rf_n_jobs"],
+                    "cnn_channels": variant["cnn_channels"],
+                    "cnn_kernel_size": variant["cnn_kernel_size"],
+                    "cnn_dropout": variant["cnn_dropout"],
+                    "cnn_epochs": variant["cnn_epochs"],
+                    "cnn_batch_size": variant["cnn_batch_size"],
+                    "cnn_lr": variant["cnn_lr"],
                     "window_stride": args.window_stride,
                     "train_fraction": float(fraction),
                     "n_train_subjects": len(sampled_train),
@@ -670,6 +832,22 @@ def run_robustness_mode(
                     "xgb_subsample": variant["xgb_subsample"],
                     "xgb_colsample_bytree": variant["xgb_colsample_bytree"],
                     "xgb_n_jobs": variant["xgb_n_jobs"],
+                    "et_n_estimators": variant["et_n_estimators"],
+                    "et_max_depth": variant["et_max_depth"],
+                    "et_min_samples_split": variant["et_min_samples_split"],
+                    "et_min_samples_leaf": variant["et_min_samples_leaf"],
+                    "et_n_jobs": variant["et_n_jobs"],
+                    "rf_n_estimators": variant["rf_n_estimators"],
+                    "rf_max_depth": variant["rf_max_depth"],
+                    "rf_min_samples_split": variant["rf_min_samples_split"],
+                    "rf_min_samples_leaf": variant["rf_min_samples_leaf"],
+                    "rf_n_jobs": variant["rf_n_jobs"],
+                    "cnn_channels": variant["cnn_channels"],
+                    "cnn_kernel_size": variant["cnn_kernel_size"],
+                    "cnn_dropout": variant["cnn_dropout"],
+                    "cnn_epochs": variant["cnn_epochs"],
+                    "cnn_batch_size": variant["cnn_batch_size"],
+                    "cnn_lr": variant["cnn_lr"],
                     "window_stride": args.window_stride,
                     "perturb_type": args.perturb_type,
                     "perturb_target": args.perturb_target,

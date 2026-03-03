@@ -17,6 +17,12 @@ def main() -> None:
     parser.add_argument("--output_dir", type=str, default="runs/vqc_sweep")
     parser.add_argument("--n_qubits_grid", type=str, default="4,6,8")
     parser.add_argument("--depth_grid", type=str, default="1,3")
+    parser.add_argument(
+        "--entangle_grid",
+        type=str,
+        default="0,1",
+        help="CSV of 0/1 for entanglement toggle",
+    )
     parser.add_argument("--L", type=int, default=240)
     parser.add_argument("--horizons", type=str, default="15,30,60")
     parser.add_argument("--seed", type=int, default=0)
@@ -29,26 +35,28 @@ def main() -> None:
     output_dir = ensure_dir(args.output_dir)
     n_qubits_grid = parse_int_csv(args.n_qubits_grid)
     depth_grid = parse_int_csv(args.depth_grid)
+    entangle_grid = parse_int_csv(args.entangle_grid)
 
     rows: list[dict] = []
     for n_qubits in n_qubits_grid:
         for depth in depth_grid:
-            run_dir = output_dir / f"nq_{n_qubits}_d_{depth}"
-            cmd = [
-                sys.executable,
-                "train_lopo.py",
+            for entangle in entangle_grid:
+                run_dir = output_dir / f"nq_{n_qubits}_d_{depth}_e_{entangle}"
+                cmd = [
+                    sys.executable,
+                    "train_lopo.py",
                 "--data_dir",
                 args.data_dir,
                 "--model",
                 "gru_mixer",
                 "--mixer",
                 "vqc",
-                "--n_qubits",
-                str(n_qubits),
-                "--vqc_depth",
-                str(depth),
-                "--vqc_entangle",
-                "1",
+                    "--n_qubits",
+                    str(n_qubits),
+                    "--vqc_depth",
+                    str(depth),
+                    "--vqc_entangle",
+                    str(entangle),
                 "--L",
                 str(args.L),
                 "--horizons",
@@ -66,23 +74,24 @@ def main() -> None:
                 "--max_folds",
                 str(args.max_folds),
             ]
-            subprocess.run(cmd, check=True)
-            agg_path = run_dir / "lopo_aggregate.xlsx"
-            if not agg_path.exists():
-                continue
-            agg = pd.read_excel(agg_path)
-            if agg.empty:
-                continue
-            row = {
-                "n_qubits": n_qubits,
-                "vqc_depth": depth,
-                "macro_mae_mean": float(agg["macro_mae_mean"].iloc[0]),
-                "macro_mae_std": float(agg["macro_mae_std"].iloc[0]),
-                "macro_rmse_mean": float(agg["macro_rmse_mean"].iloc[0]),
-                "macro_rmse_std": float(agg["macro_rmse_std"].iloc[0]),
-                "run_dir": str(run_dir),
-            }
-            rows.append(row)
+                subprocess.run(cmd, check=True)
+                agg_path = run_dir / "lopo_aggregate.xlsx"
+                if not agg_path.exists():
+                    continue
+                agg = pd.read_excel(agg_path)
+                if agg.empty:
+                    continue
+                row = {
+                    "n_qubits": n_qubits,
+                    "vqc_depth": depth,
+                    "vqc_entangle": entangle,
+                    "macro_mae_mean": float(agg["macro_mae_mean"].iloc[0]),
+                    "macro_mae_std": float(agg["macro_mae_std"].iloc[0]),
+                    "macro_rmse_mean": float(agg["macro_rmse_mean"].iloc[0]),
+                    "macro_rmse_std": float(agg["macro_rmse_std"].iloc[0]),
+                    "run_dir": str(run_dir),
+                }
+                rows.append(row)
 
     pd.DataFrame(rows).to_excel(output_dir / "sweep_summary.xlsx", index=False)
 
