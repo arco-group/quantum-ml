@@ -2,7 +2,7 @@
 #SBATCH -A naiss2025-5-662 -p alvis
 #SBATCH -N 1 --gpus-per-node=A40:1
 #SBATCH --cpus-per-task=8
-#SBATCH -t 04:00:00
+#SBATCH -t 00:20:00
 #SBATCH -o logs/%x_%A_%a.out
 #SBATCH -e logs/%x_%A_%a.err
 

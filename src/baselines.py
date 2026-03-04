@@ -156,7 +156,7 @@ class ExtraTreesDirectBaseline:
         min_samples_split: int = 2,
         min_samples_leaf: int = 1,
         seed: int = 0,
-        n_jobs: int = 1,
+        n_jobs: int = -1,
     ) -> None:
         self.n_estimators = int(n_estimators)
         self.max_depth = None if max_depth is None or int(max_depth) <= 0 else int(max_depth)
