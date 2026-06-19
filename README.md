@@ -1,6 +1,6 @@
 # Hybrid Quantum Neural Network for Multivariate Clinical Time Series Forecasting
 [Irene Iele](https://scholar.google.com/citations?user=srLH7lkAAAAJ&hl=it&oi=ao)<sup>1</sup>, 
-[Floriano Caprio]<sup>1</sup>,
+Floriano Caprio<sup>1</sup>,
 [Paolo Soda](https://scholar.google.com/citations?user=E7rcYCQAAAAJ&hl=it&oi=ao)<sup>1,2</sup>, 
 [Matteo Tortora](https://matteotortora.github.io)<sup>3</sup>
 
