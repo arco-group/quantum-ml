@@ -7,6 +7,12 @@ Floriano Caprio<sup>1</sup>,
 <sup>1</sup>  University Campus Bio-Medico of Rome,
 <sup>2</sup>  Umeå University,
 <sup>3</sup>  University of Genoa
+</div>
+
+[![arXiv](https://arxiv.org/pdf/2603.08072)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+</div>
+
 <img width="1244" height="854" alt="method_v3_cbms_page-0001" src="https://github.com/user-attachments/assets/6748f527-0eb3-402e-9541-3b490c7293d6" />
 
 
