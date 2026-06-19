@@ -9,7 +9,7 @@ Floriano Caprio<sup>1</sup>,
 <sup>3</sup>  University of Genoa
 </div>
 
-[![arXiv](https://arxiv.org/pdf/2603.08072)
+[![arXiv](https://img.shields.io/badge/arXiv-2603.08072-b31b1b.svg)](https://arxiv.org/pdf/2603.08072)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 </div>
 
