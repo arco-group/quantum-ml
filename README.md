@@ -7,7 +7,10 @@ Floriano Caprio<sup>1</sup>,
 <sup>1</sup>  University Campus Bio-Medico of Rome,
 <sup>2</sup>  Umeå University,
 <sup>3</sup>  University of Genoa
+<img width="1244" height="854" alt="method_v3_cbms_page-0001" src="https://github.com/user-attachments/assets/6748f527-0eb3-402e-9541-3b490c7293d6" />
 
+
+Public release of the code used in the CBMS 2026 paper on Hybrid Quantum Neural Network for Multivariate Clinical Time Series Forecasting.
 Pipeline LOPO/LOSO su BIDMC Numerics (1 Hz) per forecasting multi-horizon con focus su ablation `GRU + mixer` (`none`, `mlp`, `vqc`).
 
 ## Struttura
