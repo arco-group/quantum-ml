@@ -1,4 +1,12 @@
-# quantum-ml
+# Hybrid Quantum Neural Network for Multivariate Clinical Time Series Forecasting
+[Irene Iele](https://scholar.google.com/citations?user=srLH7lkAAAAJ&hl=it&oi=ao)<sup>1</sup>, 
+[Floriano Caprio]<sup>1</sup>,
+[Paolo Soda](https://scholar.google.com/citations?user=E7rcYCQAAAAJ&hl=it&oi=ao)<sup>1,2</sup>, 
+[Matteo Tortora](https://matteotortora.github.io)<sup>3</sup>
+
+<sup>1</sup>  University Campus Bio-Medico of Rome,
+<sup>2</sup>  Umeå University,
+<sup>3</sup>  University of Genoa
 
 Pipeline LOPO/LOSO su BIDMC Numerics (1 Hz) per forecasting multi-horizon con focus su ablation `GRU + mixer` (`none`, `mlp`, `vqc`).
 
