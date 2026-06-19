@@ -10,13 +10,13 @@ Floriano Caprio<sup>1</sup>,
 </div>
 
 [![arXiv](https://img.shields.io/badge/arXiv-2603.08072-b31b1b.svg)](https://arxiv.org/pdf/2603.08072)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 </div>
 
+# Overview
+Public release of the code used in the CBMS 2026 paper on Hybrid Quantum Neural Network for Multivariate Clinical Time Series Forecasting.
+</div>
 <img width="1244" height="854" alt="method_v3_cbms_page-0001" src="https://github.com/user-attachments/assets/6748f527-0eb3-402e-9541-3b490c7293d6" />
 
-
-Public release of the code used in the CBMS 2026 paper on Hybrid Quantum Neural Network for Multivariate Clinical Time Series Forecasting.
 Pipeline LOPO/LOSO su BIDMC Numerics (1 Hz) per forecasting multi-horizon con focus su ablation `GRU + mixer` (`none`, `mlp`, `vqc`).
 
 ## Struttura
