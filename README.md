@@ -19,7 +19,7 @@ Public release of the code used in the CBMS 2026 paper on Hybrid Quantum Neural 
 
 Pipeline LOPO/LOSO su BIDMC Numerics (1 Hz) per forecasting multi-horizon con focus su ablation `GRU + mixer` (`none`, `mlp`, `vqc`).
 
-## Struttura
+## Structure
 
 ```text
 train_lopo.py
@@ -43,7 +43,7 @@ src/
     vqc.py
 ```
 
-## Dipendenze
+## Dependecies
 
 ```bash
 pip install numpy pandas torch matplotlib
@@ -54,7 +54,7 @@ pip install pennylane-lightning  # consigliato (backend lightning.qubit)
 pip install xgboost  # obbligatorio solo per model=xgboost_direct
 ```
 
-## Dataset atteso
+## Dataset
 
 File `Data/bidmc_XX_Numerics.csv` con colonne:
 
@@ -70,7 +70,7 @@ Windowing:
 - `Y[i] = X[t + h_i]` con `t` ultimo timestamp della finestra input.
 - `--target_mode value` (default) oppure `--target_mode delta` (`Y_delta = Y_abs - X[t]`)
 
-## Esecuzione standard (LOPO)
+## LOPO protocol
 
 Baseline GRU:
 
@@ -238,7 +238,7 @@ Output:
 
 - `runs/jobarray/vqc_sweep/sweep_summary.xlsx`
 
-## Note implementative
+## Note
 
 - Split LOPO by-subject: ogni fold usa 1 soggetto test e gli altri train/val.
 - Val split by-subject (default `--val_ratio 0.1`).
