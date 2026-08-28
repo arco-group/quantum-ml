@@ -1,0 +1,47 @@
+Per runnare plot_model_bar_by_horizon.py
+usa:
+
+python /mimer/NOBACKUP/groups/naiss2023-6-336/mtortora/quantum-ml/plots_delta/plot_model_bar_by_horizon.py \
+  --metric rmse \
+  --scale_factor 6 \
+  --out_dir /mimer/NOBACKUP/groups/naiss2023-6-336/mtortora/quantum-ml/runs/plots_delta \
+  --model_run extratrees=/mimer/NOBACKUP/groups/naiss2023-6-336/mtortora/quantum-ml/runs/jobarray/std_extratrees \
+  --model_run cnn1d=/mimer/NOBACKUP/groups/naiss2023-6-336/mtortora/quantum-ml/runs/jobarray/std_cnn1d_direct_delta_new \
+  --model_run tcn=/mimer/NOBACKUP/groups/naiss2023-6-336/mtortora/quantum-ml/runs/jobarray/delta-15-30-60/tcn_delta \
+  --model_run lstm=/mimer/NOBACKUP/groups/naiss2023-6-336/mtortora/quantum-ml/runs/jobarray/delta-15-30-60/lstm_tiny_delta \
+  --model_run patchtst=/mimer/NOBACKUP/groups/naiss2023-6-336/mtortora/quantum-ml/runs/jobarray/std_patchtst \
+  --model_run ours=/mimer/NOBACKUP/groups/naiss2023-6-336/mtortora/quantum-ml/runs/jobarray/delta-15-30-60/gru_vqc_delta
+
+Per runnare plot_model_bar_by_horizon.py
+usa:
+
+python /mimer/NOBACKUP/groups/naiss2023-6-336/mtortora/quantum-ml/plots_delta/plot_model_score_scaled_by_task.py \
+  --metric rmse \
+  --out_dir /mimer/NOBACKUP/groups/naiss2023-6-336/mtortora/quantum-ml/runs/plots_delta/v2_task_rmse \
+  --scale_factor 6 \
+  --palette Pastel1 \
+  --model_run extratrees=/mimer/NOBACKUP/groups/naiss2023-6-336/mtortora/quantum-ml/runs/jobarray/std_extratrees \
+  --model_run cnn1d=/mimer/NOBACKUP/groups/naiss2023-6-336/mtortora/quantum-ml/runs/jobarray/std_cnn1d_direct_delta_new \
+  --model_run tcn=/mimer/NOBACKUP/groups/naiss2023-6-336/mtortora/quantum-ml/runs/jobarray/delta-15-30-60/tcn_delta \
+  --model_run lstm=/mimer/NOBACKUP/groups/naiss2023-6-336/mtortora/quantum-ml/runs/jobarray/delta-15-30-60/lstm_tiny_delta \
+  --model_run patchtst=/mimer/NOBACKUP/groups/naiss2023-6-336/mtortora/quantum-ml/runs/jobarray/std_patchtst \
+  --model_run ours=/mimer/NOBACKUP/groups/naiss2023-6-336/mtortora/quantum-ml/runs/jobarray/delta-15-30-60/gru_vqc_delta
+
+
+Per runnare plot_robustness_two_subplots.py
+usa:
+
+python /mimer/NOBACKUP/groups/naiss2023-6-336/mtortora/quantum-ml/runs/plots_delta/plot_robustness_two_subplots.py \
+  --input_xlsx /mimer/NOBACKUP/groups/naiss2023-6-336/mtortora/quantum-ml/runs/jobarray/rob_miss_delta/aggregate_mean_std.xlsx \
+  --output_png /mimer/NOBACKUP/groups/naiss2023-6-336/mtortora/quantum-ml/runs/jobarray/rob_miss_delta/robustness_mae_rmse_two_subplots.png \
+  --title ""
+
+
+
+per runnare plot_robustness_two_subplots_noise.py
+usa:
+
+python /mimer/NOBACKUP/groups/naiss2023-6-336/mtortora/quantum-ml/runs/plots_delta/plot_robustness_two_subplots_noise.py \
+  --input_xlsx /mimer/NOBACKUP/groups/naiss2023-6-336/mtortora/quantum-ml/runs/jobarray/rob_noise_delta/aggregate_mean_std.xlsx \
+  --output_png /mimer/NOBACKUP/groups/naiss2023-6-336/mtortora/quantum-ml/runs/jobarray/rob_noise_delta/robustness_mae_rmse_two_subplots.png \
+  --title ""

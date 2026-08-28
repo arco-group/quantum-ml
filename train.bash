@@ -41,7 +41,7 @@ python train_lopo.py \
   --epochs 30 \
   --batch_size 128 \
   --lr 1e-3 \
-  --output_dir runs/final_gru_vqc_n10_d5_e1 \
+  --output_dir runs_2/final_gru_vqc_n10_d5_e1 \
   --device cpu \
   --vqc_backend default.qubit
 #COMMENTO
