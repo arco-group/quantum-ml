@@ -1,307 +1,201 @@
 # Hybrid Quantum Neural Network for Multivariate Clinical Time Series Forecasting
-[Irene Iele](https://scholar.google.com/citations?user=srLH7lkAAAAJ&hl=it&oi=ao)<sup>1</sup>, 
-Floriano Caprio<sup>1</sup>,
-[Paolo Soda](https://scholar.google.com/citations?user=E7rcYCQAAAAJ&hl=it&oi=ao)<sup>1,2</sup>, 
-[Matteo Tortora](https://matteotortora.github.io)<sup>3</sup>
 
-<sup>1</sup>  University Campus Bio-Medico of Rome,
-<sup>2</sup>  Umeå University,
-<sup>3</sup>  University of Genoa
-</div>
+[![arXiv](https://img.shields.io/badge/arXiv-2603.08072-b31b1b.svg)](https://arxiv.org/abs/2603.08072)
 
-[![arXiv](https://img.shields.io/badge/arXiv-2603.08072-b31b1b.svg)](https://arxiv.org/pdf/2603.08072)
-</div>
+Code accompanying the paper *Hybrid Quantum Neural Network for Multivariate Clinical Time Series Forecasting*.
 
-# Overview
-Public release of the code used in the CBMS 2026 paper on Hybrid Quantum Neural Network for Multivariate Clinical Time Series Forecasting.
-</div>
-<img width="1244" height="854" alt="method_v3_cbms_page-0001" src="https://github.com/user-attachments/assets/6748f527-0eb3-402e-9541-3b490c7293d6" />
+Irene Iele¹, Floriano Caprio¹, Paolo Soda¹˒², Matteo Tortora³
 
-Pipeline LOPO/LOSO su BIDMC Numerics (1 Hz) per forecasting multi-horizon con focus su ablation `GRU + mixer` (`none`, `mlp`, `vqc`).
+¹ University Campus Bio-Medico of Rome · ² Umeå University · ³ University of Genoa
 
-## Structure
+![Overview of the proposed method](https://github.com/user-attachments/assets/6748f527-0eb3-402e-9541-3b490c7293d6)
 
-```text
-train_lopo.py
-plot_curves.py
-sweep_vqc.py
-src/
-  data.py
-  splits.py
-  baselines.py
-  train.py
-  eval.py
-  utils.py
-  models/
-    gru_mixer.py
-    dlinear.py
-    lstm_tiny.py
-    nhits_tiny.py
-    patchtst_tiny.py
-    tcn.py
-    transformer.py
-    vqc.py
-```
+## What this repository does
 
-## Dependecies
+This project trains and evaluates forecasting models on the BIDMC PPG and Respiration dataset's Numerics recordings. Each recording is treated as one subject. The main evaluation uses leave-one-subject-out (LOSO/LOPO) cross-validation: one subject is held out for testing, and the remaining subjects are split into training and validation sets.
+
+The default task uses four 1 Hz signals (`HR`, `PULSE`, `RESP`, and `SpO2`). A 240-step input window predicts the values 15, 30, and 60 steps ahead. Window length, stride, horizons, target representation, model, and training settings can be changed from the command line.
+
+## Repository contents
+
+- `train_lopo.py`: main entry point for standard, data-efficiency, and robustness experiments.
+- `sweep_vqc.py`: sequential sweep over VQC qubit count, depth, and entanglement settings.
+- `bidmc_download.py`: downloads CSV files from the BIDMC dataset index.
+- `merge_lopo_runs.py`, `merge_found_reports.py`, `export_competitor_metrics.py`: combine or export experiment metrics.
+- `src/`: data preparation, subject splits, models, training, baselines, and evaluation code.
+- `slurm_*.sh`, `submit_vqc_arrays.sh`: optional SLURM job scripts. They contain generic resource settings; supply your cluster's account and partition when submitting.
+
+Generated data and experiment outputs are not included in the repository.
+
+## Requirements and installation
+
+Python 3.10 or newer is recommended. Create an environment and install the core dependencies:
 
 ```bash
-pip install numpy pandas torch matplotlib
-pip install openpyxl  # necessario per output .xlsx
-pip install pennylane  # obbligatorio solo per mixer=vqc
-pip install pennylane-lightning  # consigliato (backend lightning.qubit)
-# pip install pennylane-lightning-gpu  # opzionale per backend lightning.gpu
-pip install xgboost  # obbligatorio solo per model=xgboost_direct
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 ```
 
-## Dataset
+The default workflow writes Excel files, so `openpyxl` is included in the requirements. For CUDA, install a PyTorch build compatible with your system and CUDA driver.
 
-File `Data/bidmc_XX_Numerics.csv` con colonne:
-
-- `HR`
-- `PULSE`
-- `RESP`
-- `SpO2`
-
-Windowing:
-
-- input `L=240` (default)
-- target multi-horizon da `--horizons` (default `15,30,60`)
-- `Y[i] = X[t + h_i]` con `t` ultimo timestamp della finestra input.
-- `--target_mode value` (default) oppure `--target_mode delta` (`Y_delta = Y_abs - X[t]`)
-
-## LOPO protocol
-
-Baseline GRU:
+Optional dependencies:
 
 ```bash
-python train_lopo.py --model gru_mixer --mixer none
+python -m pip install pennylane pennylane-lightning  # VQC mixer and CPU Lightning backend
+python -m pip install xgboost                         # xgboost_direct baseline
 ```
 
-Versione delta-target (valutazione sempre in valore assoluto):
+Other PennyLane backends, such as `lightning.gpu`, require their corresponding PennyLane plugin and a compatible GPU environment.
+
+## Data
+
+Place files named `bidmc_<subject>_Numerics.csv` in `Data/`. The loader expects the columns `HR`, `PULSE`, `RESP`, and `SpO2`. Data files are not tracked by Git.
+
+To download the CSV files from the default BIDMC index:
 
 ```bash
-python train_lopo.py --model gru_mixer --mixer none --target_mode delta
+python bidmc_download.py --dest Data
 ```
 
-Run singolo fold LOPO (utile per job array):
+The loader discovers subject IDs from filenames. By default it forward-fills and backward-fills missing values. Use `--nan_strategy drop` to discard windows containing missing values instead.
 
-```bash
-python train_lopo.py --model gru_mixer --mixer none --test_subject 01
-```
+## Run an experiment
 
-Ablation non-quantum:
-
-```bash
-python train_lopo.py --model gru_mixer --mixer mlp
-```
-
-VQC con entanglement:
-
-```bash
-python train_lopo.py --model gru_mixer --mixer vqc --n_qubits 6 --vqc_depth 3 --vqc_entangle 1
-```
-
-VQC con tentativo backend GPU (se disponibile):
-
-```bash
-python train_lopo.py --model gru_mixer --mixer vqc --vqc_backend auto --vqc_vectorized 1 --device cuda
-```
-
-VQC forzato su `lightning.gpu` (errore se plugin non presente):
-
-```bash
-python train_lopo.py --model gru_mixer --mixer vqc --vqc_backend lightning.gpu --device cuda
-```
-
-VQC senza entanglement:
-
-```bash
-python train_lopo.py --model gru_mixer --mixer vqc --n_qubits 6 --vqc_depth 3 --vqc_entangle 0
-```
-
-Baselines classiche:
-
-```bash
-python train_lopo.py --model persistence
-python train_lopo.py --model ridge
-python train_lopo.py --model xgboost_direct
-```
-
-Nuove baseline comparabili a `GRU+VQC` (default):
-
-```bash
-python train_lopo.py --model patchtst_tiny --patch_len 16 --patch_stride 8 --patch_d_model 32 --patch_nhead 4 --patch_num_layers 1
-python train_lopo.py --model dlinear --dlinear_ma_window 25
-python train_lopo.py --model nhits_tiny --nhits_blocks 2 --nhits_hidden 32 --nhits_pool_base 2
-python train_lopo.py --model lstm_tiny --lstm_hidden_dim 56
-python train_lopo.py --model tcn --tcn_channels 32 --tcn_levels 3 --tcn_kernel_size 3 --tcn_dropout 0.1
-python train_lopo.py --model xgboost_direct --xgb_n_estimators 16 --xgb_max_depth 6 --xgb_learning_rate 0.05
-```
-
-Nota capacity matching (default):
-
-- `GRU+VQC (6 qubits, depth=3)` ~ stesso ordine di grandezza dei parametri trainabili di `lstm_tiny` con `hidden=56` e `tcn` con `channels=32, levels=3`.
-- `xgboost_direct` usa una metrica di complessita "effective params" (`horizons * features * n_estimators * 2^max_depth`) per stare nello stesso ordine di grandezza.
-
-Output principali in `--output_dir`:
-
-- `lopo_fold_metrics.xlsx`
-- `lopo_aggregate.xlsx` (mean/std su soggetti test)
-- `checkpoints/*.pt`
-- `histories/*.xlsx`
-
-## Data Efficiency
+Run the default GRU baseline on CPU:
 
 ```bash
 python train_lopo.py \
   --model gru_mixer \
-  --exp_mode data_efficiency \
-  --L 240 \
-  --window_stride 1 \
-  --horizons 15,30,60 \
-  --seed 0 \
-  --output_dir runs/de
+  --mixer none \
+  --device cpu \
+  --output_dir runs/gru_baseline
 ```
 
-Confronto automatico:
+The default `--device` is `cuda`; if CUDA is unavailable, the code falls back to CPU. To run only one test-subject fold, add `--test_subject 1`. To limit a run for a quick check, add `--max_folds 1`.
 
-- `GRU + none`
-- `GRU + vqc`
+### Models
 
-Output:
+The `--model` option supports:
 
-- `data_efficiency_fold_metrics.xlsx`
-- `data_efficiency_summary.xlsx`
+- Neural models: `gru_mixer`, `patchtst_tiny`, `dlinear`, `nhits_tiny`, `lstm_tiny`, `tcn`, and `transformer`.
+- Baselines: `persistence`, `ridge`, `extratrees_direct`, `random_forest_direct`, `cnn1d_direct`, and `xgboost_direct`.
 
-## Robustness
+The `--mixer` option applies to `gru_mixer` and accepts `none`, `mlp`, or `vqc`. PennyLane is required for `--mixer vqc`.
 
-Missingness (test-only):
+Examples:
 
 ```bash
-python train_lopo.py \
-  --model gru_mixer \
-  --exp_mode robustness \
-  --perturb_type missingness \
-  --missing_rates 0.0,0.1,0.3 \
-  --perturb_target test \
-  --mask_channel 1 \
-  --output_dir runs/rob_miss_new
+# GRU with an MLP mixer
+python train_lopo.py --model gru_mixer --mixer mlp --device cpu
+
+# GRU with a variational quantum circuit
+python train_lopo.py --model gru_mixer --mixer vqc \
+  --n_qubits 6 --vqc_depth 3 --vqc_entangle 1 --device cpu
+
+# PatchTST and an optional XGBoost baseline
+python train_lopo.py --model patchtst_tiny --device cpu
+python train_lopo.py --model xgboost_direct --device cpu
 ```
 
-Noise (test-only):
+Run `python train_lopo.py --help` for all model and experiment options.
+
+### Forecast targets and evaluation
+
+- `--L`: input window length (default `240`).
+- `--window_stride`: distance between input windows (default `1`).
+- `--horizons`: comma-separated forecast steps (default `15,30,60`).
+- `--target_mode value`: predict future signal values directly (default).
+- `--target_mode delta`: predict changes relative to the last input step; reported metrics are converted back to signal values.
+
+The training and validation split is by subject. Feature normalization statistics are computed from training subjects only. The default validation fraction is `0.1`; `--seed` controls randomized splits and training. Results include macro MAE/RMSE and per-horizon, per-signal metrics.
+
+## Experiment modes
+
+### Data efficiency
+
+Compare GRU mixers while varying the fraction of training subjects:
 
 ```bash
-python train_lopo.py \
-  --model gru_mixer \
-  --exp_mode robustness \
-  --perturb_type noise \
-  --noise_sigmas 0.0,0.01,0.05 \
-  --output_dir runs/rob_noise_new
+python train_lopo.py --exp_mode data_efficiency \
+  --data_fractions 1.0,0.5,0.25 \
+  --device cpu --output_dir runs/data_efficiency
 ```
 
-Output:
+The mode evaluates `gru_mixer` with `none`, `mlp`, and `vqc` mixers.
 
-- `robustness_fold_metrics.xlsx`
-- `robustness_summary.xlsx`
+### Robustness
 
-## Plot curve
+Evaluate the three GRU mixer variants under missingness or added noise. By default, perturbations affect the test split only.
 
 ```bash
-python plot_curves.py \
-  --data_eff_file runs/de/data_efficiency_summary.xlsx \
-  --robustness_file runs/rob_miss/robustness_summary.xlsx \
-  --metric macro_rmse \
-  --output_dir runs/plots
+python train_lopo.py --exp_mode robustness \
+  --perturb_type missingness --missing_rates 0.0,0.1,0.3 \
+  --device cpu --output_dir runs/robustness_missingness
 ```
 
-Figure generate:
+Use `--perturb_type noise --noise_sigmas 0.0,0.01,0.05` for noise, or set `--perturb_target train_test` to perturb training, validation, and test data.
 
-- `learning_curve.png`
-- `robustness_curve.png`
+### VQC parameter sweep
 
-## Sweep opzionale VQC (n_qubits, depth)
-
-```bash
-python sweep_vqc.py --n_qubits_grid 4,6,8 --depth_grid 1,3 --output_dir runs/vqc_sweep
-```
-Output:
-
-- `runs/vqc_sweep/sweep_summary.xlsx`
-
+Run a sequential sweep over qubit counts, circuit depths, and entanglement settings:
 
 ```bash
-chmod +x submit_vqc_arrays.sh
+python sweep_vqc.py --data_dir Data --n_qubits_grid 4,6,8 \
+  --depth_grid 1,3 --entangle_grid 0,1 --output_dir runs/vqc_sweep
 ```
 
-Output:
+This requires PennyLane. The sweep runs each configuration in sequence and writes a summary after the runs complete.
 
-- `runs/jobarray/vqc_sweep/sweep_summary.xlsx`
+## Outputs
 
-## Note
+Each training run writes to `--output_dir`. Standard mode produces:
 
-- Split LOPO by-subject: ogni fold usa 1 soggetto test e gli altri train/val.
-- Val split by-subject (default `--val_ratio 0.1`).
-- Standardizzazione sempre calcolata solo sui soggetti train del fold/configurazione corrente.
-- `--nan_strategy`:
-  - `ffill_bfill` (default)
-  - `drop` (scarta finestre con NaN)
-- `--window_stride`:
-  - `1` (default): usa tutte le finestre
-  - `>1`: sottocampiona le finestre (piu veloce, meno sample)
-- `--target_mode`:
-  - `value` (default): predice direttamente i valori futuri
-  - `delta`: predice differenze rispetto all'ultimo punto input; metriche comunque calcolate su valori assoluti ricostruiti
-- `--test_subject`:
-  - default vuoto: esegue tutti i fold LOPO
-  - es. `01` o `1`: esegue solo il fold con quel soggetto in test
-- `--vqc_backend`:
-  - `auto` (default): prova `lightning.gpu` su host CUDA, altrimenti fallback CPU
-  - `lightning.gpu`, `lightning.qubit`, `default.qubit`, `default.qubit.torch`
-- `--vqc_vectorized`:
-  - `1` (default): prova inferenza/training batched nel VQC, con fallback automatico a loop per-sample
-  - `0`: forza modalità per-sample (più lenta ma utile per debug)
-- Seed fisso con `--seed`.
+- `lopo_fold_metrics.xlsx`: metrics for each test-subject fold.
+- `lopo_aggregate.xlsx`: mean and standard deviation across folds.
+- `checkpoints/`: best model checkpoints.
+- `histories/`: per-epoch training histories.
 
-## SLURM Job Array
+Data-efficiency and robustness modes write corresponding `*_fold_metrics.xlsx` and summary `.xlsx` files. The sweep writes `sweep_summary.xlsx` in its output directory. Excel output requires `openpyxl`.
 
-Script inclusi in root:
-
-- `slurm_lopo_array.sh`: lancia un fold per task array (usa `--test_subject`).
-- `merge_lopo_runs.py`: unisce risultati per-soggetto in un unico `.xlsx`.
-- `slurm_merge_results.sh`: wrapper SLURM per merge finale.
-
-Rendi eseguibili gli script:
+Merge separate SLURM array outputs with:
 
 ```bash
-chmod +x slurm_lopo_array.sh slurm_merge_results.sh
+python merge_lopo_runs.py \
+  --runs_root runs/jobarray/my_run \
+  --metrics_name lopo_fold_metrics.xlsx
 ```
 
-Esempio submit baseline `GRU+none` su tutti i 53 soggetti:
+Use `python merge_lopo_runs.py --help` and `python export_competitor_metrics.py --help` for their available options.
+
+## SLURM (optional)
+
+The job scripts assume you run them from the repository root and have created `logs/`. Set `DATA_DIR` if your data is elsewhere. If you created the `.venv` environment above, export its activation script before submitting jobs:
 
 ```bash
-sbatch --array=0-52%8 \
-  --export=ALL,RUN_TAG=std_gru_none,EXP_MODE=standard,MODEL=gru_mixer,MIXER=none \
+export VENV_PATH="$PWD/.venv/bin/activate"
+```
+
+For example, submit a GPU array for 53 subjects, with at most 8 folds running at once:
+
+```bash
+mkdir -p logs
+sbatch --account YOUR_ACCOUNT --partition YOUR_PARTITION \
+  --array=0-52%8 \
+  --export=ALL,RUN_TAG=gru_baseline,EXP_MODE=standard,MODEL=gru_mixer,MIXER=none \
   slurm_lopo_array.sh
 ```
 
-Esempio submit `GRU+VQC` CPU (`lightning.qubit`):
+Use `slurm_lopo_array_cpu.sh` for CPU jobs. Set the array range to match the number of subject files available. The GPU script requests one GPU; edit its resource directives if your cluster uses different syntax or hardware.
+
+`submit_vqc_arrays.sh` submits the 24 combinations in its configured grid and a merge job after each array. Configure the subject range and cluster options before using it:
 
 ```bash
-sbatch --array=0-52%8 \
-  --export=ALL,RUN_TAG=std_gru_vqc,EXP_MODE=standard,MODEL=gru_mixer,MIXER=vqc,DEVICE=cpu,EXTRA_ARGS="--vqc_backend lightning.qubit --vqc_vectorized 1 --vqc_entangle 1" \
-  slurm_lopo_array.sh
+mkdir -p logs
+ARRAY_RANGE=0-52 ARRAY_CONCURRENCY=8 \
+SBATCH_ARGS="--account YOUR_ACCOUNT --partition YOUR_PARTITION" \
+  ./submit_vqc_arrays.sh
 ```
 
-Merge finale risultati:
-
-```bash
-python merge_lopo_runs.py --runs_root runs/jobarray/std_gru_none
-```
-
-Submit merge come job dipendente:
-
-```bash
-jid=$(sbatch --array=0-52%8 --export=ALL,RUN_TAG=std_gru_none,EXP_MODE=standard,MODEL=gru_mixer,MIXER=none slurm_lopo_array.sh | awk '{print $4}')
-sbatch --dependency=afterok:${jid} --export=ALL,RUN_TAG=std_gru_none slurm_merge_results.sh
-```
+SLURM is optional; all experiments can also be run directly with `train_lopo.py`.

@@ -1,7 +1,5 @@
 #!/bin/bash
 #SBATCH -J qml_merge
-#SBATCH -A naiss2023-6-336
-#SBATCH -p main
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=4G
 #SBATCH -t 00:30:00

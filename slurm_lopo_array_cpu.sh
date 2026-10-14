@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-#SBATCH -A naiss2025-5-662
-#SBATCH -p alvis
-#SBATCH -C NOGPU
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=8
