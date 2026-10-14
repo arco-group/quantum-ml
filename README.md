@@ -1,8 +1,7 @@
 # Hybrid Quantum Neural Network for Multivariate Clinical Time Series Forecasting
 
-[![arXiv](https://img.shields.io/badge/arXiv-2603.08072-b31b1b.svg)](https://arxiv.org/abs/2603.08072)
+**Paper:** [Hybrid Quantum Neural Network for Multivariate Clinical Time Series Forecasting (CBMS 2026)](https://ieeexplore.ieee.org/document/11718304)
 
-Irene Iele¹, Floriano Caprio¹, Paolo Soda¹˒², Matteo Tortora³
 
 [Irene Iele](https://scholar.google.com/citations?user=srLH7lkAAAAJ&hl=it&oi=ao)<sup>1</sup>, 
 [Floriano Caprio](https://scholar.google.com/citations?user=LLV13MIAAAAJ&hl=it&oi=ao)<sup>1</sup>, 
