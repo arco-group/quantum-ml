@@ -6,7 +6,7 @@
 [Irene Iele](https://scholar.google.com/citations?user=srLH7lkAAAAJ&hl=it&oi=ao)<sup>1</sup>, 
 [Floriano Caprio](https://scholar.google.com/citations?user=LLV13MIAAAAJ&hl=it&oi=ao)<sup>1</sup>, 
 [Paolo Soda](https://scholar.google.com/citations?user=E7rcYCQAAAAJ&hl=it&oi=ao)<sup>1,2</sup>, 
-[Matteo Tortora](https://matteotortora.github.io)<sup>4</sup>
+[Matteo Tortora](https://matteotortora.github.io)<sup>3</sup>
 
 ¹ University Campus Bio-Medico of Rome · ² Umeå University · ³ University of Genoa
 
